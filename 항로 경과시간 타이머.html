@@ -93,8 +93,7 @@
             <div class="flex items-center gap-2 flex-1 max-w-xl min-w-[260px]">
                 <div class="relative flex-1 min-w-0">
                     <input type="text" placeholder="출발 섬 선택 (자음 검색 가능)" id="freeStart" autocomplete="off"
-                        oninput="handleIslandInput('freeStart','freeStartDropdown', event)"
-                        oncompositionend="handleIslandInput('freeStart','freeStartDropdown')"
+                        oninput="handleIslandInput('freeStart','freeStartDropdown')"
                         onfocus="renderIslandDropdown('freeStart','freeStartDropdown')"
                         onblur="onIslandInputBlur('freeStartDropdown')"
                         class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-300 rounded pl-2 pr-6 py-2 outline-none font-bold text-xs focus:border-blue-500 transition">
@@ -104,8 +103,7 @@
                 <span class="text-gray-500 dark:text-gray-500 font-bold shrink-0">➔</span>
                 <div class="relative flex-1 min-w-0">
                     <input type="text" placeholder="도착 섬 선택 (자음 검색 가능)" id="freeEnd" autocomplete="off"
-                        oninput="handleIslandInput('freeEnd','freeEndDropdown', event)"
-                        oncompositionend="handleIslandInput('freeEnd','freeEndDropdown')"
+                        oninput="handleIslandInput('freeEnd','freeEndDropdown')"
                         onfocus="renderIslandDropdown('freeEnd','freeEndDropdown')"
                         onblur="onIslandInputBlur('freeEndDropdown')"
                         class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-300 rounded pl-2 pr-6 py-2 outline-none font-bold text-xs focus:border-blue-500 transition">
@@ -222,6 +220,15 @@ function safeParse(key, fallback) {
         let val = localStorage.getItem(key);
         return val ? JSON.parse(val) : fallback;
     } catch (e) { return fallback; }
+}
+
+// localStorage 쓰기가 실패하는 환경(저장 공간 초과, 저장이 막힌 브라우저 설정 등)을 딱 한 번만 알려줌.
+// 설정 저장은 값을 바꿀 때마다 계속 시도되므로, 매번 띄우면 토스트가 도배됩니다.
+let storageWriteFailWarned = false;
+function warnStorageWriteFailure() {
+    if (storageWriteFailWarned) return;
+    storageWriteFailWarned = true;
+    showToast("⚠️ 설정/기록을 저장할 수 없는 환경입니다. 새로고침하면 지금 변경사항이 사라질 수 있습니다.");
 }
 
 // 원본 앱과 같은 브라우저에서 열면 저장된 커스텀 보정치(bdoRouteCalibrations)도 그대로 이어받습니다.
@@ -392,9 +399,14 @@ function decomposeToJamo(str) {
 // 완성형 텍스트("하코")든 자음만("ㅎㅋ")이든, 한/영 전환을 깜빡한 영타("gkzhqj"→하코번을 치던 중)든
 // 모두 매칭되도록, 원문 부분일치 + 초성 부분일치 + 두벌식 자모 부분일치를 함께 검사
 function filterIslands(query) {
-    const q = String(query || '').trim();
+    let q = String(query || '').trim();
     // 빈 검색어(입력창에 포커스만 준 상태)일 땐, 정렬된 목록 맨 앞(자주 쓰는 거점) 그대로 보여줌
     if (!q) return sortedIslandNames.slice(0, 15);
+    // IME가 자음 두 개를 겹받침 한 글자로 합쳐버린 경우(예: ㄹ+ㅁ → ㄻ), 검색 시점에만 원래
+    // 구성 자음 두 개로 풀어서 비교합니다. 입력창에 보이는 값 자체는 건드리지 않습니다 — 조합 중인
+    // input.value를 직접 고치면 IME 조합 상태가 깨져서 바로 다음 글자가 엉뚱하게 결합되는
+    // 문제가 있었습니다(예: "ㄹㅁ" 입력 중 값을 고치면 다음에 친 "ㅅ"이 "ㄹㅅ"으로 잘못 합쳐짐).
+    q = q.replace(INVALID_CHOSUNG_JAMO, ch => CHOSUNG_JAMO_SPLIT_MAP[ch]);
     // 초성 비교에서는 공백을 무시해서, "ㅎㅋㅂㅅ"와 "ㅎㅋㅂ ㅅ" 둘 다 "하코번 섬"에 매칭되게 함
     const qChosung = toChosung(q).replace(/\s/g, '');
     // q가 완성형 음절을 포함하면(예: "일리야") toChosung이 그걸 초성으로 축소시켜버리는데,
@@ -458,8 +470,8 @@ function renderIslandDropdown(inputId, dropdownId) {
 }
 
 // ㄳ,ㄵ,ㄶ,ㄺ,ㄻ,ㄼ,ㄽ,ㄾ,ㄿ,ㅀ,ㅄ — 겹받침 전용이라 초성으로는 절대 쓰일 수 없는 자음들.
-// 지워버리면 사용자가 입력하려던 두 자음 중 하나가 사라지므로, 원래 구성 자음 두 개로 분리합니다.
-// (예: ㅄ → ㅂㅅ, ㄳ → ㄱㅅ) — IME가 두 자음을 겹받침 한 글자로 합쳐버렸을 때를 되돌리는 것입니다.
+// IME가 두 자음을 겹받침 한 글자로 합쳐버렸을 때(예: ㄹ+ㅁ → ㄻ), 검색 시(filterIslands)
+// 원래 구성 자음 두 개로 풀어서 비교합니다. 입력창 값 자체는 건드리지 않습니다.
 const CHOSUNG_JAMO_SPLIT_MAP = {
     'ㄳ': 'ㄱㅅ', 'ㄵ': 'ㄴㅈ', 'ㄶ': 'ㄴㅎ',
     'ㄺ': 'ㄹㄱ', 'ㄻ': 'ㄹㅁ', 'ㄼ': 'ㄹㅂ', 'ㄽ': 'ㄹㅅ', 'ㄾ': 'ㄹㅌ', 'ㄿ': 'ㄹㅍ', 'ㅀ': 'ㄹㅎ',
@@ -467,25 +479,11 @@ const CHOSUNG_JAMO_SPLIT_MAP = {
 };
 const INVALID_CHOSUNG_JAMO = /[ㄳㄵㄶㄺㄻㄼㄽㄾㄿㅀㅄ]/g;
 
-function sanitizeIslandInput(input) {
+// 입력값을 transformFn으로 필터링하고, 바뀐 경우에만 커서 위치를 보존하며 반영합니다.
+function applyInputTransform(input, transformFn) {
     const cursorPos = input.selectionStart;
     const before = input.value;
-    const after = before.replace(INVALID_CHOSUNG_JAMO, ch => CHOSUNG_JAMO_SPLIT_MAP[ch]);
-    if (after === before) return;
-
-    input.value = after;
-    if (cursorPos !== null) {
-        const diff = after.length - before.length;
-        const newPos = Math.max(0, cursorPos + diff);
-        input.setSelectionRange(newPos, newPos);
-    }
-}
-
-// 안전 시간 % 입력란: 숫자와 맨 앞의 '-'(음수 부호)만 허용
-function sanitizeSafeTimePercentInput(input) {
-    const cursorPos = input.selectionStart;
-    const before = input.value;
-    let after = before.replace(/[^0-9-]/g, '').replace(/(?!^)-/g, '');
+    const after = transformFn(before);
     if (after === before) return;
 
     input.value = after;
@@ -495,11 +493,12 @@ function sanitizeSafeTimePercentInput(input) {
     }
 }
 
-// ⭐ [버그 픽스] IME 조합이 아직 진행 중인 동안(event.isComposing) input.value를 강제로 덮어쓰면
-// 브라우저의 한글 조합 상태가 깨져서, 바로 다음 글자를 입력할 때 방금 고친 자모가 사라지고
-// 엉뚱한 자모로 재결합됩니다(예: "ㄹㅁ" → "ㄽ"). 조합이 끝난 뒤(compositionend)에만 정리합니다.
-function handleIslandInput(inputId, dropdownId, event) {
-    if (!(event && event.isComposing)) sanitizeIslandInput(document.getElementById(inputId));
+// 안전 시간 % 입력란: 숫자와 맨 앞의 '-'(음수 부호)만 허용
+function sanitizeSafeTimePercentInput(input) {
+    applyInputTransform(input, before => before.replace(/[^0-9-]/g, '').replace(/(?!^)-/g, ''));
+}
+
+function handleIslandInput(inputId, dropdownId) {
     renderIslandDropdown(inputId, dropdownId);
     scheduleCalcFreeRoute();
 }
@@ -526,7 +525,7 @@ function loadRecentRoutes() {
 }
 
 function saveRecentRoutes(list) {
-    try { localStorage.setItem(RECENT_ROUTES_KEY, JSON.stringify(list)); } catch (e) {}
+    try { localStorage.setItem(RECENT_ROUTES_KEY, JSON.stringify(list)); } catch (e) { warnStorageWriteFailure(); }
 }
 
 // 같은 경로(출발↔도착이 뒤바뀐 것도 동일 항로로 취급)가 이미 있으면 맨 앞으로 올리고(중복 방지),
@@ -689,11 +688,13 @@ function saveActiveTimer() {
             start: document.getElementById('freeStart').value.trim(),
             end: document.getElementById('freeEnd').value.trim()
         }));
-    } catch (e) {}
+    } catch (e) { warnStorageWriteFailure(); }
 }
 
 function clearActiveTimer() {
-    try { localStorage.removeItem(ACTIVE_TIMER_KEY); } catch (e) {}
+    // 실패하면 리셋된 타이머의 낡은 기록이 남아, 다음 로드 때 restoreActiveTimer가 "이미 도착함"으로
+    // 잘못 판단할 수 있으므로 다른 저장 실패와 동일하게 알립니다.
+    try { localStorage.removeItem(ACTIVE_TIMER_KEY); } catch (e) { warnStorageWriteFailure(); }
 }
 
 // 페이지가 (재)로드될 때 진행 중이던 타이머가 있으면 이어서 재개합니다.
@@ -773,7 +774,11 @@ async function idbSaveSound(blob, name) {
             tx.oncomplete = resolve;
             tx.onerror = () => reject(tx.error);
         });
-    } catch (e) { console.warn('알람음 파일 저장 실패:', e); }
+        return true;
+    } catch (e) {
+        console.warn('알람음 파일 저장 실패:', e);
+        return false;
+    }
 }
 
 async function idbLoadSound() {
@@ -788,7 +793,7 @@ async function idbLoadSound() {
     } catch (e) { return null; }
 }
 
-function handleCustomSoundFile(event) {
+async function handleCustomSoundFile(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
 
@@ -798,9 +803,15 @@ function handleCustomSoundFile(event) {
     document.getElementById('customSoundPath').value = file.name;
 
     document.getElementById('useCustomSound').checked = true;
-    showToast(`🔊 알람음 "${file.name}" 등록 완료!`);
 
-    idbSaveSound(file, file.name); // 파일 내용을 통째로 저장해, 다음에 페이지를 열어도 그대로 재생 가능
+    // 파일 내용을 통째로 저장해, 다음에 페이지를 열어도 그대로 재생 가능 — 저장이 실패해도
+    // 이번 세션에선 그대로 쓸 수 있으니, 사용자에게 "저장까지는 안 됐다"는 것만 알려줍니다.
+    const saved = await idbSaveSound(file, file.name);
+    if (saved) {
+        showToast(`🔊 알람음 "${file.name}" 등록 완료!`);
+    } else {
+        showToast(`⚠️ "${file.name}" 등록은 됐지만 저장에 실패해, 새로고침하면 사라집니다.`);
+    }
     saveNavSettings();
 }
 
@@ -812,15 +823,22 @@ function onUseCustomSoundToggle() {
     saveNavSettings();
 }
 
+// 등록한 파일이 깨졌거나 재생 불가능한 형식이어서 기본음으로 대체될 때, 그 사실을 알려줌
+// (알려주지 않으면 사용자는 왜 자기가 고른 소리가 아니라 기본음이 나오는지 알 수 없습니다)
+function fallbackToDefaultAlarm() {
+    showToast("⚠️ 등록한 알람음을 재생할 수 없어 기본 알람음으로 대신 재생합니다.");
+    playAlarmSound();
+}
+
 // 도착 알람 재생: 커스텀 사운드가 등록+사용 체크되어 있으면 그것을, 아니면 기본 합성음을 재생
 function playArrivalAlarm() {
     const useCustom = document.getElementById('useCustomSound').checked;
     if (useCustom && customAudioElement) {
         try {
             customAudioElement.currentTime = 0;
-            customAudioElement.play().catch(() => playAlarmSound());
+            customAudioElement.play().catch(fallbackToDefaultAlarm);
         } catch (e) {
-            playAlarmSound();
+            fallbackToDefaultAlarm();
         }
     } else {
         playAlarmSound();
@@ -926,7 +944,10 @@ function saveNavSettings() {
         localStorage.setItem('navShipAccel', document.getElementById('mainShipAccel').value);
         localStorage.setItem('navSafeTimePercent', document.getElementById('safeTimePercent').value);
         localStorage.setItem('navUseCustomSound', document.getElementById('useCustomSound').checked ? '1' : '0');
-    } catch (e) { console.warn('설정 저장 실패:', e); }
+    } catch (e) {
+        console.warn('설정 저장 실패:', e);
+        warnStorageWriteFailure();
+    }
 }
 
 // 페이지 로드 시 저장된 값들을 복원
@@ -960,6 +981,11 @@ async function loadNavSettings() {
             document.getElementById('useCustomSound').checked = savedUseCustomSound;
         } else {
             document.getElementById('useCustomSound').checked = false;
+            // savedUseCustomSound가 true인데 stored가 없다는 건 "한 번도 등록 안 함"이 아니라
+            // "등록해뒀는데 IndexedDB에서 못 불러왔다"는 뜻이므로, 조용히 넘어가지 않고 알려줍니다.
+            if (savedUseCustomSound) {
+                showToast("⚠️ 이전에 등록한 알람음을 불러오지 못해 기본 알람음으로 되돌아갑니다.");
+            }
         }
 
         // ⭐ 모든 필드가 최종 복원된 뒤, 한 번만 정식으로 저장 — 위에서처럼 중간 단계 값으로
