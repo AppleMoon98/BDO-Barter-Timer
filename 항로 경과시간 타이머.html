@@ -340,19 +340,37 @@ function toChosung(str) {
     return result;
 }
 
-// 완성형 텍스트("하코")든 자음만("ㅎㅋ")이든 모두 매칭되도록, 원문 부분일치 + 초성 부분일치를 함께 검사
+// 두벌식 키보드에서 각 영문 키가 위치한 한글 자모 (한/영 전환을 깜빡하고 쳤을 때 대응)
+// 예: 한글 입력을 의도했지만 영문 상태였던 "dfd" → 물리적으로 같은 키 위치인 "ㅇㄹㅇ"로 인식
+const QWERTY_TO_HANGUL_MAP = {
+    q:'ㅂ', w:'ㅈ', e:'ㄷ', r:'ㄱ', t:'ㅅ', y:'ㅛ', u:'ㅕ', i:'ㅑ', o:'ㅐ', p:'ㅔ',
+    a:'ㅁ', s:'ㄴ', d:'ㅇ', f:'ㄹ', g:'ㅎ', h:'ㅗ', j:'ㅓ', k:'ㅏ', l:'ㅣ',
+    z:'ㅋ', x:'ㅌ', c:'ㅊ', v:'ㅍ', b:'ㅠ', n:'ㅜ', m:'ㅡ',
+    Q:'ㅃ', W:'ㅉ', E:'ㄸ', R:'ㄲ', T:'ㅆ', O:'ㅒ', P:'ㅖ'
+};
+
+function qwertyToHangul(str) {
+    let result = '';
+    for (const ch of String(str || '')) result += QWERTY_TO_HANGUL_MAP[ch] || ch;
+    return result;
+}
+
+// 완성형 텍스트("하코")든 자음만("ㅎㅋ")이든, 한/영 전환을 깜빡한 영타("dfd")든 모두 매칭되도록,
+// 원문 부분일치 + 초성 부분일치 + 두벌식 자모 변환 부분일치를 함께 검사
 function filterIslands(query) {
     const q = String(query || '').trim();
     // 빈 검색어(입력창에 포커스만 준 상태)일 땐, 정렬된 목록 맨 앞(자주 쓰는 거점) 그대로 보여줌
     if (!q) return sortedIslandNames.slice(0, 15);
     // 초성 비교에서는 공백을 무시해서, "ㅎㅋㅂㅅ"와 "ㅎㅋㅂ ㅅ" 둘 다 "하코번 섬"에 매칭되게 함
     const qChosung = toChosung(q).replace(/\s/g, '');
+    const qFromQwerty = toChosung(qwertyToHangul(q)).replace(/\s/g, '');
 
     const matches = [];
     for (const name of sortedIslandNames) {
         const nameChosung = toChosung(name).replace(/\s/g, '');
-        if (name.includes(q) || nameChosung.includes(qChosung)) {
-            const startsWithQuery = name.startsWith(q) || nameChosung.startsWith(qChosung);
+        const hit = name.includes(q) || nameChosung.includes(qChosung) || nameChosung.includes(qFromQwerty);
+        if (hit) {
+            const startsWithQuery = name.startsWith(q) || nameChosung.startsWith(qChosung) || nameChosung.startsWith(qFromQwerty);
             matches.push({ name, startsWithQuery });
         }
     }
