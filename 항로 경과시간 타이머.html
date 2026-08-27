@@ -347,9 +347,20 @@ function filterIslands(query) {
     if (!q) return sortedIslandNames.slice(0, 15);
     // 초성 비교에서는 공백을 무시해서, "ㅎㅋㅂㅅ"와 "ㅎㅋㅂ ㅅ" 둘 다 "하코번 섬"에 매칭되게 함
     const qChosung = toChosung(q).replace(/\s/g, '');
-    return sortedIslandNames
-        .filter(name => name.includes(q) || toChosung(name).replace(/\s/g, '').includes(qChosung))
-        .slice(0, 15);
+
+    const matches = [];
+    for (const name of sortedIslandNames) {
+        const nameChosung = toChosung(name).replace(/\s/g, '');
+        if (name.includes(q) || nameChosung.includes(qChosung)) {
+            const startsWithQuery = name.startsWith(q) || nameChosung.startsWith(qChosung);
+            matches.push({ name, startsWithQuery });
+        }
+    }
+    // 검색어로 시작하는 이름(예: "ㄹㅇ" → "루이바노 섬")을 최우선으로 올리고,
+    // 나머지(이름 중간에 매칭되는 것)는 기존 정렬(자주 쓰는 거점→가나다순)을 그대로 유지
+    matches.sort((a, b) => (a.startsWithQuery === b.startsWithQuery) ? 0 : (a.startsWithQuery ? -1 : 1));
+
+    return matches.slice(0, 15).map(m => m.name);
 }
 
 function renderIslandDropdown(inputId, dropdownId) {
