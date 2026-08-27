@@ -395,6 +395,11 @@ function filterIslands(query) {
     if (!q) return sortedIslandNames.slice(0, 15);
     // 초성 비교에서는 공백을 무시해서, "ㅎㅋㅂㅅ"와 "ㅎㅋㅂ ㅅ" 둘 다 "하코번 섬"에 매칭되게 함
     const qChosung = toChosung(q).replace(/\s/g, '');
+    // q가 완성형 음절을 포함하면(예: "일리야") toChosung이 그걸 초성으로 축소시켜버리는데,
+    // 그 축소된 결과로 다른 이름의 초성과 부분일치 비교를 하면 안 됩니다 — 우연히 초성이 겹치는
+    // 엉뚱한 이름(예: "베이루와 섬"의 초성 "ㅂㅇㄹㅇㅅ" 안에 "일리야"의 초성 "ㅇㄹㅇ"가 포함됨)까지
+    // 잘못 걸립니다. q 자체가 순수 자음("ㅎㅋㅂ")일 때만 초성 비교가 의미 있습니다.
+    const qIsPureConsonants = qChosung === q.replace(/\s/g, '');
 
     // 한/영 전환을 깜빡하고 두벌식 자판 그대로 친 검색어 대응: 이름을 초성+중성+종성 자모로 미리
     // 풀어헤쳐두고, 검색어도 같은 방식(자모 단위)으로 비교하면 음절 경계 재조합 없이도 아직 다 안 친
@@ -409,10 +414,10 @@ function filterIslands(query) {
         const nameChosung = toChosung(name).replace(/\s/g, '');
         const nameJamo = decomposeToJamo(name).replace(/\s/g, '');
         const qwertyHit = qwertyHasVowel ? nameJamo.includes(qwertyJamo) : nameChosung.includes(qwertyJamo);
-        const hit = name.includes(q) || nameChosung.includes(qChosung) || qwertyHit;
+        const hit = name.includes(q) || (qIsPureConsonants && nameChosung.includes(qChosung)) || qwertyHit;
         if (hit) {
             const qwertyStarts = qwertyHasVowel ? nameJamo.startsWith(qwertyJamo) : nameChosung.startsWith(qwertyJamo);
-            const startsWithQuery = name.startsWith(q) || nameChosung.startsWith(qChosung) || qwertyStarts;
+            const startsWithQuery = name.startsWith(q) || (qIsPureConsonants && nameChosung.startsWith(qChosung)) || qwertyStarts;
             matches.push({ name, startsWithQuery });
         }
     }
