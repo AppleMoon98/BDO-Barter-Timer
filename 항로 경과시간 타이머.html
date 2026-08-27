@@ -502,14 +502,16 @@ function isKnownIsland(name) {
     return resolveIslandKey(name) !== null;
 }
 
-// ⭐ [버그 픽스] 입력이 비거나 무효해졌을 때, 타이머가 실행 중이면 반드시 함께 취소합니다.
-// (그냥 freeTotalSeconds만 0으로 두면, 실행 중인 카운트다운이 다음 틱에 즉시 "도착"으로 잘못 판정됨)
 function cancelRouteAndMaybeTimer() {
     freeTotalSeconds = 0;
-    if (freeTimerInterval) resetFreeTimer(); else updateFreeRouteDisplay(0, 0);
+    updateFreeRouteDisplay(0, 0);
 }
 
+// ⭐ 이미 출발한(실행 중인) 타이머는 목적지/배속/과적/안전시간 등 어떤 설정을 바꿔도
+// 자동으로 재계산·리셋되지 않습니다. 취소하려면 "취소" 버튼을 명시적으로 눌러야 합니다.
 function calcFreeRoute() {
+    if (freeTimerInterval) return;
+
     let startVal = document.getElementById('freeStart').value.trim();
     let endVal = document.getElementById('freeEnd').value.trim();
 
@@ -524,20 +526,8 @@ function calcFreeRoute() {
     let isSafeTime = document.getElementById('isSafeTime').checked;
     let safetyMargin = isSafeTime ? 1.15 : 1.0; // 안전 시간: 도착 예상 시간에 15% 여유를 더함
     let timeMins = (dist / currentSpeed) * penalty * safetyMargin;
-    let newTotalSeconds = Math.round(timeMins * 60);
-
-    if (freeTimerInterval) {
-        // ⭐ [버그 픽스] 출발 버튼 클릭이 입력창의 blur를 유발해 이 함수가 재호출되면서,
-        // 경로가 그대로인데도 방금 시작한 타이머가 즉시 리셋되던 문제를 방지합니다.
-        // 실제로 계산 결과(소요시간)가 달라졌을 때만 "목적지를 바꿨다"고 간주해 리셋합니다.
-        if (newTotalSeconds !== freeTotalSeconds) {
-            freeTotalSeconds = newTotalSeconds;
-            resetFreeTimer();
-        }
-    } else {
-        freeTotalSeconds = newTotalSeconds;
-        updateFreeRouteDisplay(0, freeTotalSeconds);
-    }
+    freeTotalSeconds = Math.round(timeMins * 60);
+    updateFreeRouteDisplay(0, freeTotalSeconds);
 }
 
 function updateFreeRouteDisplay(elapsed, total) {
@@ -711,7 +701,7 @@ function dismissArrivalOverlay() {
 
 // 도착 시점마다 항상 자동으로 발동
 function triggerArrivalAlert() {
-    showArrivalOverlay("도착했습니다.");
+    showArrivalOverlay("도착시간이 되었습니다.");
 }
 
 function playAlarmSound() {
