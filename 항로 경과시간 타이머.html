@@ -107,7 +107,7 @@
                         onfocus="renderIslandDropdown('freeEnd','freeEndDropdown')"
                         onblur="onIslandInputBlur('freeEndDropdown')"
                         class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-300 rounded pl-2 pr-6 py-2 outline-none font-bold text-xs focus:border-blue-500 transition">
-                    <span title="" class="absolute right-1.5 top-1/2 -translate-y-1/2 z-10 text-gray-400 dark:text-gray-500 text-[11px] font-bold cursor-help select-none">ⓘ</span>
+                    <span title="어차피 도착이랑 출발이랑 위치 바껴도 시간은 똑같으니까 대충 섬만 적으면 됩니다." class="absolute right-1.5 top-1/2 -translate-y-1/2 z-10 text-gray-400 dark:text-gray-500 text-[11px] font-bold cursor-help select-none">ⓘ</span>
                     <div id="freeEndDropdown" class="hidden absolute z-30 top-full left-0 right-0 mt-1 max-h-52 overflow-y-auto bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl"></div>
                 </div>
             </div>
@@ -611,16 +611,19 @@ function calcFreeRoute() {
     if (isNaN(safeTimePercent)) safeTimePercent = 0;
     let safetyMargin = isSafeTime ? 1 + (safeTimePercent / 100) : 1.0; // 안전 시간: 도착 예상 시간에 n% 여유를 더함
     let timeMins = (dist / currentSpeed) * penalty * safetyMargin;
-    freeTotalSeconds = Math.round(timeMins * 60);
+    // 안전 시간 %를 크게 음수로 넣으면(-100% 미만) 소요시간이 음수가 될 수 있어, 0초로 바닥을 둠
+    freeTotalSeconds = Math.max(0, Math.round(timeMins * 60));
     updateFreeRouteDisplay(0, freeTotalSeconds);
 }
 
+function formatMMSS(totalSeconds) {
+    const min = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+    const sec = String(totalSeconds % 60).padStart(2, '0');
+    return `${min}:${sec}`;
+}
+
 function updateFreeRouteDisplay(elapsed, total) {
-    let elMin = String(Math.floor(elapsed / 60)).padStart(2, '0');
-    let elSec = String(elapsed % 60).padStart(2, '0');
-    let totMin = String(Math.floor(total / 60)).padStart(2, '0');
-    let totSec = String(total % 60).padStart(2, '0');
-    document.getElementById('freeTime').innerText = `${elMin}:${elSec} / ${totMin}:${totSec}`;
+    document.getElementById('freeTime').innerText = `${formatMMSS(elapsed)} / ${formatMMSS(total)}`;
 }
 
 function toggleFreeTimer() {
@@ -652,9 +655,7 @@ function toggleFreeTimer() {
 // 남은 시간을 탭 제목으로 표시 (다른 탭/창을 보고 있어도 확인 가능)
 function updateCountdownTitle() {
     const remaining = Math.max(0, freeTotalSeconds - freeElapsedSeconds);
-    const min = String(Math.floor(remaining / 60)).padStart(2, '0');
-    const sec = String(remaining % 60).padStart(2, '0');
-    document.title = `⏳ ${min}:${sec} 남음`;
+    document.title = `⏳ ${formatMMSS(remaining)} 남음`;
 }
 
 function resetFreeTimer() {
