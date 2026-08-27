@@ -93,7 +93,8 @@
             <div class="flex items-center gap-2 flex-1 max-w-xl min-w-[260px]">
                 <div class="relative flex-1 min-w-0">
                     <input type="text" placeholder="출발 섬 선택 (자음 검색 가능)" id="freeStart" autocomplete="off"
-                        oninput="handleIslandInput('freeStart','freeStartDropdown')"
+                        oninput="handleIslandInput('freeStart','freeStartDropdown', event)"
+                        oncompositionend="handleIslandInput('freeStart','freeStartDropdown')"
                         onfocus="renderIslandDropdown('freeStart','freeStartDropdown')"
                         onblur="onIslandInputBlur('freeStartDropdown')"
                         class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-300 rounded pl-2 pr-6 py-2 outline-none font-bold text-xs focus:border-blue-500 transition">
@@ -103,7 +104,8 @@
                 <span class="text-gray-500 dark:text-gray-500 font-bold shrink-0">➔</span>
                 <div class="relative flex-1 min-w-0">
                     <input type="text" placeholder="도착 섬 선택 (자음 검색 가능)" id="freeEnd" autocomplete="off"
-                        oninput="handleIslandInput('freeEnd','freeEndDropdown')"
+                        oninput="handleIslandInput('freeEnd','freeEndDropdown', event)"
+                        oncompositionend="handleIslandInput('freeEnd','freeEndDropdown')"
                         onfocus="renderIslandDropdown('freeEnd','freeEndDropdown')"
                         onblur="onIslandInputBlur('freeEndDropdown')"
                         class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-300 rounded pl-2 pr-6 py-2 outline-none font-bold text-xs focus:border-blue-500 transition">
@@ -493,8 +495,11 @@ function sanitizeSafeTimePercentInput(input) {
     }
 }
 
-function handleIslandInput(inputId, dropdownId) {
-    sanitizeIslandInput(document.getElementById(inputId));
+// ⭐ [버그 픽스] IME 조합이 아직 진행 중인 동안(event.isComposing) input.value를 강제로 덮어쓰면
+// 브라우저의 한글 조합 상태가 깨져서, 바로 다음 글자를 입력할 때 방금 고친 자모가 사라지고
+// 엉뚱한 자모로 재결합됩니다(예: "ㄹㅁ" → "ㄽ"). 조합이 끝난 뒤(compositionend)에만 정리합니다.
+function handleIslandInput(inputId, dropdownId, event) {
+    if (!(event && event.isComposing)) sanitizeIslandInput(document.getElementById(inputId));
     renderIslandDropdown(inputId, dropdownId);
     scheduleCalcFreeRoute();
 }
