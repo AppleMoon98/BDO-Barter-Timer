@@ -179,7 +179,7 @@ const rawData = {
     "하코번 섬": {"x": 2779, "y": 790},
     "안카도 내항": {"x": 2076, "y": 143},
     "아레하자 마을": {"x": 3383, "y": 1657},
-    "일리야": {"x": 0, "y": 0},
+    "일리야 섬": {"x": 0, "y": 0},
     "떠내려온 미완성 선박": {"x": -1827, "y": 2444, "isOcean": true},
     "그믐달 길드의 중범선": {"x": -2137, "y": 1915, "isOcean": true},
     "난파된 하란의 수송선": {"x": -1704, "y": 1590, "isOcean": true},
@@ -203,8 +203,8 @@ const defaultRouteCalibrations = {
     "하코번 섬_아레하자 마을": { multiplier: 0.938461538461538 },
     "아레하자 마을_에페리아 초소": { multiplier: 1.12684729064039 },
     "에페리아 초소_올비아 해안": { multiplier: 1.07142857142857 },
-    "올비아 해안_일리야": { multiplier: 1.05263157894737 },
-    "일리야_하코번 섬": { multiplier: 0.877390326209224 },
+    "올비아 해안_일리야 섬": { multiplier: 1.05263157894737 },
+    "일리야 섬_하코번 섬": { multiplier: 0.877390326209224 },
     "하코번 섬_올비아 해안": { multiplier: 1.01108033240997 },
     "파키오의 전투 뗏목_랑티니아의 전투 뗏목": { multiplier: 0.703703703703704 },
     "랑티니아의 전투 뗏목_떠내려온 미완성 선박": { multiplier: 0.652173913043478 },
@@ -319,11 +319,11 @@ let sortedIslandNames = [];
 
 function initFreeRouteSelects() {
     sortedIslandNames = Object.keys(islandCoordinates)
-        .filter(k => k.includes(" ") || k.length >= 3 || k === "일리야")
+        .filter(k => k.includes(" ") || k.length >= 3)
         .filter(k => !ALIAS_HIDE_FROM_LIST.includes(k));
 
     // 박사님 맞춤형 황금 정렬 그룹
-    const top1 = ["일리야 섬", "일리야"];
+    const top1 = ["일리야 섬"];
     const top2 = ["하코번 섬", "아레하자 마을", "그란디하", "깊은 밤의 항구", "해모 섬", "달래나루"]; // 6단
     const top3 = ["올비아 해안", "에페리아 초소", "소산 주둔지 선착장", "성전 해안 정찰지"]; // 7단
 
@@ -409,7 +409,7 @@ function filterIslands(query) {
     q = q.replace(INVALID_CHOSUNG_JAMO, ch => CHOSUNG_JAMO_SPLIT_MAP[ch]);
     // 초성 비교에서는 공백을 무시해서, "ㅎㅋㅂㅅ"와 "ㅎㅋㅂ ㅅ" 둘 다 "하코번 섬"에 매칭되게 함
     const qChosung = toChosung(q).replace(/\s/g, '');
-    // q가 완성형 음절을 포함하면(예: "일리야") toChosung이 그걸 초성으로 축소시켜버리는데,
+    // q가 완성형 음절을 포함하면(예: "일리야 섬") toChosung이 그걸 초성으로 축소시켜버리는데,
     // 그 축소된 결과로 다른 이름의 초성과 부분일치 비교를 하면 안 됩니다 — 우연히 초성이 겹치는
     // 엉뚱한 이름(예: "베이루와 섬"의 초성 "ㅂㅇㄹㅇㅅ" 안에 "일리야"의 초성 "ㅇㄹㅇ"가 포함됨)까지
     // 잘못 걸립니다. q 자체가 순수 자음("ㅎㅋㅂ")일 때만 초성 비교가 의미 있습니다.
