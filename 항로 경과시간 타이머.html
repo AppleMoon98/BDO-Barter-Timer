@@ -132,13 +132,13 @@
 // ============================================================================
 const rawData = {
     "달래나루": {"x": -2471, "y": 2682},
-    "해모 섬": {"x": -3261, "y": 1751}, "해모": {"x": -3261, "y": 1751},
+    "해모 섬": {"x": -3261, "y": 1751}, 
     "그란디하": {"x": -2524, "y": -1534},
-    "깊은 밤의 항구": {"x": -3049, "y": -1975}, "깊은 밤": {"x": -3049, "y": -1975},
+    "깊은 밤의 항구": {"x": -3049, "y": -1975}, 
     "올비아 해안": {"x": -519, "y": -440},
     "에페리아 초소": {"x": -1424, "y": -525},
-    "소산 주둔지 선착장": {"x": 241, "y": -356}, "소산 선착장": {"x": 241, "y": -356}, "소산 주둔지": {"x": 241, "y": -356},
-    "성전 해안 정찰지": {"x": 1026, "y": 486}, "성전 해안": {"x": 1026, "y": 486},
+    "소산 주둔지 선착장": {"x": 241, "y": -356}, 
+    "성전 해안 정찰지": {"x": 1026, "y": 486}, 
     "테야말 섬": {"x": -1714, "y": -555}, "라메다 섬": {"x": -1685, "y": -337},
     "시오닐 섬": {"x": -1750, "y": -550}, "모드릭 섬": {"x": -1576, "y": -476},
     "바에자 섬": {"x": -1500, "y": -509}, "진버레이 섬": {"x": -1534, "y": -343},
@@ -239,9 +239,22 @@ const APP_CONFIG = { SHIP_SPEED: 170, OVERLOAD_PENALTY: 1.6 }; // OVERLOAD_PENAL
 // ============================================================================
 // 거리/시간 계산 로직 (원본 legDistance / applyOceanCurrent / getIslandCoords 동일 이식)
 // ============================================================================
-// 섬 이름을 " 섬"/" 제도" 접미사 유무에 관계없이 실제 데이터 키로 정규화 (없으면 null)
+// 같은 위치를 가리키는 별칭 중, " 섬"/" 제도" 접미사 규칙으로는 정식 명칭에 도달할 수 없는 것들
+//  - 깊은 밤          → 정식 명칭: 깊은 밤의 항구
+//  - 소산 선착장/소산 주둔지 → 정식 명칭: 소산 주둔지 선착장
+//  - 성전 해안        → 정식 명칭: 성전 해안 정찰지
+// (해모 → 해모 섬은 접미사 규칙만으로 해석되므로 별도 등록 불필요)
+const ISLAND_ALIAS_MAP = {
+    "깊은 밤": "깊은 밤의 항구",
+    "소산 선착장": "소산 주둔지 선착장",
+    "소산 주둔지": "소산 주둔지 선착장",
+    "성전 해안": "성전 해안 정찰지"
+};
+
+// 섬 이름을 " 섬"/" 제도" 접미사 유무 또는 위 별칭 유무에 관계없이 실제 데이터 키로 정규화 (없으면 null)
 function resolveIslandKey(islandName) {
     let cleanName = String(islandName || "").replace(/ 섬$/, '').replace(/ 제도$/, '').trim();
+    if (ISLAND_ALIAS_MAP[cleanName]) return ISLAND_ALIAS_MAP[cleanName];
     if (islandCoordinates[cleanName]) return cleanName;
     if (islandCoordinates[cleanName + " 섬"]) return cleanName + " 섬";
     if (islandCoordinates[cleanName + " 제도"]) return cleanName + " 제도";
@@ -308,19 +321,11 @@ let freeTotalSeconds = 0;
 let freeArrivalTimestamp = null;
 const ACTIVE_TIMER_KEY = 'navActiveTimer';
 
-// 같은 위치를 가리키는 별칭 중, 자동완성 목록에는 정식 명칭만 노출하고 나머지는 숨김
-//  - 깊은 밤          → 정식 명칭: 깊은 밤의 항구
-//  - 소산 선착장/소산 주둔지 → 정식 명칭: 소산 주둔지 선착장
-//  - 성전 해안        → 정식 명칭: 성전 해안 정찰지
-//  - 해모             → 정식 명칭: 해모 섬 (기존 필터로 이미 숨겨짐)
-const ALIAS_HIDE_FROM_LIST = ["깊은 밤", "소산 선착장", "소산 주둔지", "성전 해안"];
-
 let sortedIslandNames = [];
 
 function initFreeRouteSelects() {
     sortedIslandNames = Object.keys(islandCoordinates)
-        .filter(k => k.includes(" ") || k.length >= 3)
-        .filter(k => !ALIAS_HIDE_FROM_LIST.includes(k));
+        .filter(k => k.includes(" ") || k.length >= 3);
 
     // 박사님 맞춤형 황금 정렬 그룹
     const top1 = ["일리야 섬"];
