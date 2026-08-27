@@ -10,3 +10,4 @@
 ※ 에벤루스의 놀이 있어서 더 빨리 도착하면 음수로 값을 적고 넣어주시면 됩니다.<br/>
 ㉥: 최근에 설정한 거리 10개를 보여줍니다.
 
+https://applemoon98.github.io/BDO-Barter-Timer/%ED%95%AD%EB%A1%9C%20%EA%B2%BD%EA%B3%BC%EC%8B%9C%EA%B0%84%20%ED%83%80%EC%9D%B4%EB%A8%B8.html
