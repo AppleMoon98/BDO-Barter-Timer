@@ -221,9 +221,18 @@ const APP_CONFIG = { SHIP_SPEED: 170, OVERLOAD_PENALTY: 1.6 }; // OVERLOAD_PENAL
 // ============================================================================
 // 거리/시간 계산 로직 (원본 legDistance / applyOceanCurrent / getIslandCoords 동일 이식)
 // ============================================================================
-function getIslandCoords(islandName) {
+// 섬 이름을 " 섬"/" 제도" 접미사 유무에 관계없이 실제 데이터 키로 정규화 (없으면 null)
+function resolveIslandKey(islandName) {
     let cleanName = String(islandName || "").replace(/ 섬$/, '').replace(/ 제도$/, '').trim();
-    return islandCoordinates[cleanName] || islandCoordinates[cleanName+" 섬"] || islandCoordinates[cleanName+" 제도"] || {x: -150, y: 0, isOcean: false};
+    if (islandCoordinates[cleanName]) return cleanName;
+    if (islandCoordinates[cleanName + " 섬"]) return cleanName + " 섬";
+    if (islandCoordinates[cleanName + " 제도"]) return cleanName + " 제도";
+    return null;
+}
+
+function getIslandCoords(islandName) {
+    let key = resolveIslandKey(islandName);
+    return key ? islandCoordinates[key] : {x: -150, y: 0, isOcean: false};
 }
 
 function applyOceanCurrent(nameA, nameB, dist) {
@@ -416,10 +425,8 @@ const RECENT_ROUTES_KEY = 'navRecentRoutes';
 const RECENT_ROUTES_MAX = 10;
 
 function loadRecentRoutes() {
-    try {
-        const arr = JSON.parse(localStorage.getItem(RECENT_ROUTES_KEY) || '[]');
-        return Array.isArray(arr) ? arr : [];
-    } catch (e) { return []; }
+    const arr = safeParse(RECENT_ROUTES_KEY, []);
+    return Array.isArray(arr) ? arr : [];
 }
 
 function saveRecentRoutes(list) {
@@ -491,10 +498,8 @@ function scheduleCalcFreeRoute() {
     calcFreeRouteTimer = setTimeout(calcFreeRoute, 0);
 }
 
-// getIslandCoords와 동일한 방식(" 섬"/" 제도" 접미사 정규화)으로 존재 여부만 확인
 function isKnownIsland(name) {
-    let clean = String(name || "").replace(/ 섬$/, '').replace(/ 제도$/, '').trim();
-    return !!(islandCoordinates[clean] || islandCoordinates[clean + " 섬"] || islandCoordinates[clean + " 제도"]);
+    return resolveIslandKey(name) !== null;
 }
 
 // ⭐ [버그 픽스] 입력이 비거나 무효해졌을 때, 타이머가 실행 중이면 반드시 함께 취소합니다.
@@ -508,13 +513,7 @@ function calcFreeRoute() {
     let startVal = document.getElementById('freeStart').value.trim();
     let endVal = document.getElementById('freeEnd').value.trim();
 
-    if (!startVal || !endVal || startVal === endVal) {
-        cancelRouteAndMaybeTimer(); return;
-    }
-
-    let isP1Valid = isKnownIsland(startVal);
-    let isP2Valid = isKnownIsland(endVal);
-    if (!isP1Valid || !isP2Valid) {
+    if (!startVal || !endVal || startVal === endVal || !isKnownIsland(startVal) || !isKnownIsland(endVal)) {
         cancelRouteAndMaybeTimer(); return;
     }
 
