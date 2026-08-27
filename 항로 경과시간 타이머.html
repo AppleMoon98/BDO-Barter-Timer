@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BDO 항로 경과시간 타이머</title>
+<script>
+  // 테마 깜빡임 방지: Tailwind가 로드되기 전에 저장된 테마(없으면 시스템 설정)를 먼저 적용
+  (function() {
+    try {
+      const saved = localStorage.getItem('navTheme');
+      const isDark = saved ? saved === 'dark' : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (isDark) document.documentElement.classList.add('dark');
+    } catch (e) {
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.classList.add('dark');
+    }
+  })();
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { darkMode: 'class' };
+</script>
+<style>
+  body { background:#f1f5f9; transition: background-color .2s ease; }
+  .dark body { background:#111827; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+</style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6">
+
+    <button id="themeToggleBtn" onclick="toggleTheme()" class="fixed top-4 right-4 z-[90] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-xs font-bold px-3 py-1.5 rounded-full shadow-lg transition hover:bg-gray-100 dark:hover:bg-gray-700">🌙 다크 모드</button>
+
+    <div id="toastMessage" class="fixed bottom-5 right-5 bg-green-600 text-white px-5 py-3 rounded shadow-xl transition-opacity duration-300 opacity-0 pointer-events-none z-[100] font-bold">
+        알림 메시지
+    </div>
+
+    <!-- 도착 알림 오버레이: OS 권한이 전혀 필요 없는, 화면에 확실하게 뜨는 알림 -->
+    <div id="arrivalAlertOverlay" class="hidden fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-6">
+        <div class="bg-white dark:bg-gray-800 border-4 border-emerald-500 rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
+            <div class="text-5xl mb-3 animate-bounce">🔔</div>
+            <div class="text-xl font-bold text-gray-900 dark:text-white mb-6 break-words" id="arrivalAlertMessage">타이머가 종료되었습니다.</div>
+            <button onclick="dismissArrivalOverlay()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-lg shadow transition">확인</button>
+        </div>
+    </div>
+
+    <div class="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-2xl p-5 transition-colors">
+        <h1 class="text-lg font-bold text-blue-600 dark:text-blue-400 flex items-center gap-2 mb-1">
+            <span>⚓</span> BDO 항로 경과시간 타이머
+        </h1>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">「물물교환 지능형 스케줄러」에서 자유 항로 네비 기능만 분리한 단독 버전입니다. 실측 항로 보정치가 반영된 예상 소요시간을 계산합니다.</p>
+
+        <div class="flex flex-col gap-2 mb-4 bg-gray-100 dark:bg-gray-900/50 p-2 rounded border border-gray-200 dark:border-gray-700 shadow-inner">
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center gap-2" title="배속 = 속도 × 가속 / 100">
+                    <label class="text-[11px] text-blue-700 dark:text-blue-300 font-bold">속도</label>
+                    <input type="number" id="mainShipBaseSpeed" value="170" step="0.1" class="bg-white dark:bg-black border border-blue-500 text-gray-900 dark:text-white px-2 py-1.5 rounded w-16 text-sm text-center font-bold hide-arrows focus:outline-none focus:border-blue-300" onchange="syncSpeedToConfig()">
+                    <span class="text-gray-400 dark:text-gray-500 font-bold text-xs">×</span>
+                    <label class="text-[11px] text-blue-700 dark:text-blue-300 font-bold">가속</label>
+                    <input type="number" id="mainShipAccel" value="100" step="0.1" class="bg-white dark:bg-black border border-blue-500 text-gray-900 dark:text-white px-2 py-1.5 rounded w-16 text-sm text-center font-bold hide-arrows focus:outline-none focus:border-blue-300" onchange="syncSpeedToConfig()">
+                    <span class="text-gray-400 dark:text-gray-500 font-bold text-xs">%</span>
+                    <span class="text-[10px] text-gray-500 dark:text-gray-500 font-bold" id="effectiveSpeedDisplay">(배속 170)</span>
+                </div>
+                <label class="flex items-center gap-1.5 text-[11px] font-bold text-red-600 dark:text-red-400 cursor-pointer border-l border-gray-300 dark:border-gray-700 pl-3" title="체크 시 과적 페널티(x1.6)가 이동시간에 곱해집니다">
+                    <input type="checkbox" id="isOverloaded" onchange="calcFreeRoute()" class="w-3.5 h-3.5 accent-red-500 cursor-pointer"> 🔴 과적
+                </label>
+                <label class="flex items-center gap-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-400 cursor-pointer border-l border-gray-300 dark:border-gray-700 pl-3" title="체크 시 도착 예상 시간에 x1.15(15% 여유)를 곱해서 더 넉넉하게 안내합니다">
+                    <input type="checkbox" id="isSafeTime" onchange="calcFreeRoute()" class="w-3.5 h-3.5 accent-amber-500 cursor-pointer"> 🟢 안전 시간
+                </label>
+            </div>
+            <div class="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+                <label class="flex items-center gap-1.5 text-[11px] font-bold text-purple-600 dark:text-purple-400 cursor-pointer" title="체크 시 도착 알람으로 기본 합성음 대신 선택한 사운드 파일을 재생합니다">
+                    <input type="checkbox" id="useCustomSound" onchange="onUseCustomSoundToggle()" class="w-3.5 h-3.5 accent-purple-500 cursor-pointer"> 🔊 다른 알람음 사용
+                </label>
+                <input type="text" id="customSoundPath" readonly placeholder="선택된 사운드 파일 없음" title="브라우저 보안 정책상 실제 경로 대신 파일명만 표시됩니다. 재생에는 영향 없습니다." class="bg-white dark:bg-black border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 px-2 py-1.5 rounded text-[11px] w-48 outline-none cursor-default">
+                <button onclick="document.getElementById('customSoundFileInput').click()" class="bg-purple-700 hover:bg-purple-600 text-white text-[11px] px-2.5 py-1.5 rounded shadow font-bold transition">📂 가져오기</button>
+                <input type="file" id="customSoundFileInput" accept="audio/*" class="hidden" onchange="handleCustomSoundFile(event)">
+            </div>
+        </div>
+
+        <div class="bg-gray-100 dark:bg-gray-900/60 rounded-xl border border-gray-200 dark:border-gray-700 p-4 shadow-md flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-2 pl-1">
+                <span class="font-bold text-gray-800 dark:text-gray-200 text-sm">거리 설정</span>
+            </div>
+            <div class="flex items-center gap-2 flex-1 max-w-xl min-w-[260px]">
+                <div class="relative flex-1 min-w-0">
+                    <input type="text" placeholder="출발 섬 선택 (자음 검색 가능)" id="freeStart" autocomplete="off"
+                        oninput="handleIslandInput('freeStart','freeStartDropdown')"
+                        onfocus="renderIslandDropdown('freeStart','freeStartDropdown')"
+                        onblur="onIslandInputBlur('freeStartDropdown')"
+                        class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-300 rounded p-2 outline-none font-bold text-xs focus:border-blue-500 transition">
+                    <div id="freeStartDropdown" class="hidden absolute z-30 top-full left-0 right-0 mt-1 max-h-52 overflow-y-auto bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl"></div>
+                </div>
+                <span class="text-gray-500 dark:text-gray-500 font-bold shrink-0">➔</span>
+                <div class="relative flex-1 min-w-0">
+                    <input type="text" placeholder="도착 섬 선택 (자음 검색 가능)" id="freeEnd" autocomplete="off"
+                        oninput="handleIslandInput('freeEnd','freeEndDropdown')"
+                        onfocus="renderIslandDropdown('freeEnd','freeEndDropdown')"
+                        onblur="onIslandInputBlur('freeEndDropdown')"
+                        class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-300 rounded p-2 outline-none font-bold text-xs focus:border-blue-500 transition">
+                    <div id="freeEndDropdown" class="hidden absolute z-30 top-full left-0 right-0 mt-1 max-h-52 overflow-y-auto bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl"></div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="text-yellow-600 dark:text-yellow-400 font-mono font-bold text-sm tracking-wider bg-gray-200 dark:bg-black/50 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-700" id="freeTime">00:00 / 00:00</div>
+                <button id="btnFreeTimer" onclick="toggleFreeTimer()" class="bg-green-600 dark:bg-green-600 hover:bg-gray-300 dark:hover:bg-gray-600 text-white dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition">출발</button>
+                <button onclick="resetFreeTimer()" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition">리셋</button>
+            </div>
+        </div>
+
+        <div id="recentRoutesContainer" class="hidden flex flex-wrap items-center gap-2 mt-3">
+            <span class="text-[10px] text-gray-500 dark:text-gray-500 font-bold shrink-0">🕓 최근 목적지:</span>
+            <div id="recentRoutesList" class="flex flex-wrap gap-1.5"></div>
+        </div>
+
+        <p class="text-[10px] text-gray-500 dark:text-gray-500 mt-3">※ 섬 이름 입력창은 완성형 글자와 자음(예: "ㅎㅋㅂ" → 하코번) 모두로 검색할 수 있습니다. 그란디하/깊은 밤의 항구는 시오닐 경유 보정, 일부 구간은 실측 항로 보정치가 자동 적용됩니다.</p>
+        <p class="text-[10px] text-gray-500 dark:text-gray-500 mt-3">원본 : https://www.inven.co.kr/board/black/3584/58845</p>
+    </div>
+
+<script>
+// ============================================================================
+// 데이터: 섬 좌표 DB (원본 masterData/rawData 중 좌표 부분만 발췌)
+// ============================================================================
+const rawData = {
+    "달래나루": {"x": -2471, "y": 2682},
+    "해모 섬": {"x": -3261, "y": 1751}, "해모": {"x": -3261, "y": 1751},
+    "그란디하": {"x": -2524, "y": -1534},
+    "깊은 밤의 항구": {"x": -3049, "y": -1975}, "깊은 밤": {"x": -3049, "y": -1975},
+    "올비아 해안": {"x": -519, "y": -440},
+    "에페리아 초소": {"x": -1424, "y": -525},
+    "소산 주둔지 선착장": {"x": 241, "y": -356}, "소산 선착장": {"x": 241, "y": -356}, "소산 주둔지": {"x": 241, "y": -356},
+    "성전 해안 정찰지": {"x": 1026, "y": 486}, "성전 해안": {"x": 1026, "y": 486},
+    "테야말 섬": {"x": -1714, "y": -555}, "라메다 섬": {"x": -1685, "y": -337},
+    "시오닐 섬": {"x": -1750, "y": -550}, "모드릭 섬": {"x": -1576, "y": -476},
+    "바에자 섬": {"x": -1500, "y": -509}, "진버레이 섬": {"x": -1534, "y": -343},
+    "데이튼 섬": {"x": -1550, "y": -300}, "네트넘 섬": {"x": -1451, "y": -235},
+    "오벤 섬": {"x": -1389, "y": -198}, "던데 섬": {"x": -1357, "y": -271},
+    "에버딘 섬": {"x": -1307, "y": -246}, "알브레서 섬": {"x": -1232, "y": -287},
+    "바라테르 섬": {"x": -1217, "y": -353}, "란디스 섬": {"x": -1364, "y": -442},
+    "세르카 섬": {"x": -1370, "y": -503}, "테스테 섬": {"x": -1457, "y": 49},
+    "알마이 섬": {"x": -1377, "y": 123}, "쿠이트 제도": {"x": -1276, "y": 238},
+    "파딕스 섬": {"x": -1276, "y": 205}, "아리타 섬": {"x": -1011, "y": 127},
+    "리스즈 섬": {"x": -991, "y": -49}, "스타렌 섬": {"x": -1025, "y": -198},
+    "루루브 섬": {"x": -935, "y": -129}, "나르보 섬": {"x": -862, "y": 20},
+    "마르카 섬": {"x": -857, "y": -101}, "타슈 섬": {"x": -703, "y": 367},
+    "레마 섬": {"x": -533, "y": 278}, "인버넨 섬": {"x": -709, "y": 44},
+    "앙쥬 섬": {"x": -727, "y": -122}, "툴루 섬": {"x": -615, "y": 100},
+    "발베쥬 섬": {"x": -631, "y": -50}, "에베토 섬": {"x": -612, "y": -162},
+    "두흐 섬": {"x": -638, "y": -197}, "마를레느 섬": {"x": -558, "y": -54},
+    "오르프스 섬": {"x": -538, "y": 110}, "마리베노 섬": {"x": -460, "y": -156},
+    "루이바노 섬": {"x": -508, "y": -263}, "에프데 룬 섬": {"x": -379, "y": -305},
+    "바레미 섬": {"x": -377, "y": 2}, "웨이타 섬": {"x": -301, "y": -83},
+    "파라타마 섬": {"x": -285, "y": -196}, "베이루와 섬": {"x": -182, "y": -308},
+    "칸베라 섬": {"x": -190, "y": -113}, "아라킬 섬": {"x": -152, "y": -161},
+    "오스트라 섬": {"x": -39, "y": -193}, "타라무라 섬": {"x": -73, "y": -248},
+    "델링하트 섬": {"x": 124, "y": -219}, "필바라 섬": {"x": 248, "y": -240},
+    "푸자라 섬": {"x": 256, "y": 25}, "아지르 섬": {"x": -206, "y": 97},
+    "알나하 섬": {"x": -304, "y": 215}, "라시드 섬": {"x": -222, "y": 309},
+    "알 수 없는 섬": {"x": 232, "y": -359}, "소코타 섬": {"x": 435, "y": -373},
+    "리에드 섬": {"x": 596, "y": -267}, "에스파 섬": {"x": 671, "y": -121},
+    "티그리스 섬": {"x": 630, "y": -69}, "시르나 섬": {"x": 732, "y": -60},
+    "오리샤 섬": {"x": 659, "y": 95}, "보아 섬": {"x": 665, "y": 219},
+    "로즈반 섬": {"x": 384, "y": 323}, "샤샤 섬": {"x": 275, "y": 321},
+    "포르타넨 섬": {"x": 339, "y": 448}, "레라오 섬": {"x": 285, "y": 591},
+    "틴베라 섬": {"x": 152, "y": 615}, "할마드 섬": {"x": 1059, "y": 162},
+    "카슈마 섬": {"x": 1096, "y": 222}, "더코 섬": {"x": 1679, "y": 225},
+    "벨리아 마을 해변": {"x": -397, "y": -502},
+    "오킬루아의 눈": {"x": -609, "y": 824},
+    "까마귀의 둥지": {"x": 213, "y": 1037},
+    "하코번 섬": {"x": 2779, "y": 790},
+    "안카도 내항": {"x": 2076, "y": 143},
+    "아레하자 마을": {"x": 3383, "y": 1657},
+    "일리야": {"x": 0, "y": 0},
+    "떠내려온 미완성 선박": {"x": -1827, "y": 2444, "isOcean": true},
+    "그믐달 길드의 중범선": {"x": -2137, "y": 1915, "isOcean": true},
+    "난파된 하란의 수송선": {"x": -1704, "y": 1590, "isOcean": true},
+    "파키오의 전투 뗏목": {"x": -690, "y": 2208, "isOcean": true},
+    "랑티니아의 전투 뗏목": {"x": -1566, "y": 2178, "isOcean": true},
+    "난파된 콕스해적선": {"x": -1821, "y": 358, "isOcean": true},
+    "난파된 해상군의 배": {"x": -2225, "y": 550, "isOcean": true},
+    "난파된 릭쿤의 배": {"x": -1921, "y": 861, "isOcean": true},
+    "난파된 고대 유적 수송선": {"x": -1620, "y": 1136, "isOcean": true},
+    "까마귀 상단 소유의 선박": {"x": -1282, "y": 1379, "isOcean": true},
+    "숄라스 치코의 해적 연합": {"x": -2034, "y": 1450, "isOcean": true},
+    "떠돌이 상인의 배": {"x": -1314, "y": 1858, "isOcean": true}
+};
+const islandCoordinates = JSON.parse(JSON.stringify(rawData));
+
+// ============================================================================
+// 박사님이 깎은 실측 항로 보정 데이터(Multiplier)
+// ============================================================================
+const defaultRouteCalibrations = {
+    "안카도 내항_하코번 섬": { multiplier: 1.23809523809524 },
+    "하코번 섬_아레하자 마을": { multiplier: 0.938461538461538 },
+    "아레하자 마을_에페리아 초소": { multiplier: 1.12684729064039 },
+    "에페리아 초소_올비아 해안": { multiplier: 1.07142857142857 },
+    "올비아 해안_일리야": { multiplier: 1.05263157894737 },
+    "일리야_하코번 섬": { multiplier: 0.877390326209224 },
+    "하코번 섬_올비아 해안": { multiplier: 1.01108033240997 },
+    "파키오의 전투 뗏목_랑티니아의 전투 뗏목": { multiplier: 0.703703703703704 },
+    "랑티니아의 전투 뗏목_떠내려온 미완성 선박": { multiplier: 0.652173913043478 },
+    "떠내려온 미완성 선박_그믐달 길드의 중범선": { multiplier: 0.661375661375661 },
+    "그믐달 길드의 중범선_난파된 하란의 수송선": { multiplier: 0.838323353293413 },
+    "까마귀 상단 소유의 선박_난파된 릭쿤의 배": { multiplier: 0.869565217391304 },
+    "해모 섬_달래나루": { multiplier: 1.1436170212766 },
+    "성전 해안 정찰지_소산 주둔지 선착장": { multiplier: 0.790960451977401 }
+};
+
+function safeParse(key, fallback) {
+    try {
+        let val = localStorage.getItem(key);
+        return val ? JSON.parse(val) : fallback;
+    } catch (e) { return fallback; }
+}
+
+// 원본 앱과 같은 브라우저에서 열면 저장된 커스텀 보정치(bdoRouteCalibrations)도 그대로 이어받습니다.
+window.routeCalibrations = { ...defaultRouteCalibrations, ...safeParse('bdoRouteCalibrations', {}) };
+
+const APP_CONFIG = { SHIP_SPEED: 170, OVERLOAD_PENALTY: 1.6 }; // OVERLOAD_PENALTY: 원본 인게임 기본 과적 페널티(1.6배)
+
+// ============================================================================
+// 거리/시간 계산 로직 (원본 legDistance / applyOceanCurrent / getIslandCoords 동일 이식)
+// ============================================================================
+function getIslandCoords(islandName) {
+    let cleanName = String(islandName || "").replace(/ 섬$/, '').replace(/ 제도$/, '').trim();
+    return islandCoordinates[cleanName] || islandCoordinates[cleanName+" 섬"] || islandCoordinates[cleanName+" 제도"] || {x: -150, y: 0, isOcean: false};
+}
+
+function applyOceanCurrent(nameA, nameB, dist) {
+    if (!nameA || !nameB) return dist;
+    let routeKey = nameA + '_' + nameB; // 방향 구분(A→B와 B→A 보정 분리, 해류 비대칭 반영)
+    if (window.routeCalibrations[routeKey]) {
+        dist *= window.routeCalibrations[routeKey].multiplier;
+    }
+    return dist;
+}
+
+// ============================================================================
+// ⭐ 지형 보정: 그란디하/깊은 밤의 항구는 대륙에 막혀 시오닐에서 꺾여 들어가므로,
+//    직선거리는 실제 항로를 과소추정한다 → 시오닐 경유 거리로 합산
+// ============================================================================
+function legDistance(nameA, nameB) {
+    let a = String(nameA || ""); let b = String(nameB || "");
+    const isPivot  = n => n.includes("그란디하") || n.includes("깊은 밤");
+    const isSionil = n => n.includes("시오닐");
+    function rawDist(n1, n2) {
+        let c1 = getIslandCoords(n1), c2 = getIslandCoords(n2);
+        return Math.sqrt(Math.pow(c2.x - c1.x, 2) + Math.pow(c2.y - c1.y, 2));
+    }
+    let aPivot = isPivot(a), bPivot = isPivot(b);
+    if ((aPivot || bPivot) && !(aPivot && bPivot) && !isSionil(a) && !isSionil(b)) {
+        return applyOceanCurrent(a, "시오닐 섬", rawDist(a, "시오닐 섬"))
+             + applyOceanCurrent("시오닐 섬", b, rawDist("시오닐 섬", b));
+    }
+    return applyOceanCurrent(a, b, rawDist(a, b));
+}
+
+// 배속 = 속도 × 가속 / 100
+// skipSave=true면 저장을 건너뜁니다 (loadNavSettings 도중, 다른 필드들이 아직 복원되기 전에
+// 호출되므로 — 그 시점에 저장하면 아직 복원 안 된 값으로 localStorage를 덮어써버리게 됩니다)
+function syncSpeedToConfig(skipSave) {
+    const baseSpeed = parseFloat(document.getElementById('mainShipBaseSpeed').value) || 170;
+    const accel = parseFloat(document.getElementById('mainShipAccel').value) || 100;
+    APP_CONFIG.SHIP_SPEED = baseSpeed * accel / 100;
+
+    const disp = document.getElementById('effectiveSpeedDisplay');
+    if (disp) disp.textContent = `(배속 ${parseFloat(APP_CONFIG.SHIP_SPEED.toFixed(2))})`;
+
+    if (!skipSave) saveNavSettings();
+    calcFreeRoute();
+}
+
+// ============================================================================
+// 자유 항로 GPS 네비게이터 UI 로직 (원본과 동일, 단일 인스턴스로 단순화)
+// ============================================================================
+let freeTimerInterval = null;
+let freeTotalSeconds = 0;
+let freeElapsedSeconds = 0;
+
+// 같은 위치를 가리키는 별칭 중, 자동완성 목록에는 정식 명칭만 노출하고 나머지는 숨김
+//  - 깊은 밤          → 정식 명칭: 깊은 밤의 항구
+//  - 소산 선착장/소산 주둔지 → 정식 명칭: 소산 주둔지 선착장
+//  - 성전 해안        → 정식 명칭: 성전 해안 정찰지
+//  - 해모             → 정식 명칭: 해모 섬 (기존 필터로 이미 숨겨짐)
+const ALIAS_HIDE_FROM_LIST = ["깊은 밤", "소산 선착장", "소산 주둔지", "성전 해안"];
+
+let sortedIslandNames = [];
+
+function initFreeRouteSelects() {
+    sortedIslandNames = Object.keys(islandCoordinates)
+        .filter(k => k.includes(" ") || k.length >= 3 || k === "일리야")
+        .filter(k => !ALIAS_HIDE_FROM_LIST.includes(k));
+
+    // 박사님 맞춤형 황금 정렬 그룹
+    const top1 = ["일리야 섬", "일리야"];
+    const top2 = ["하코번 섬", "아레하자 마을", "그란디하", "깊은 밤의 항구", "해모 섬", "달래나루"]; // 6단
+    const top3 = ["올비아 해안", "에페리아 초소", "소산 주둔지 선착장", "성전 해안 정찰지"]; // 7단
+
+    const getPriority = (name) => {
+        if (top1.includes(name)) return 1;
+        if (top2.includes(name)) return 2;
+        if (top3.includes(name)) return 3;
+        return 4;
+    };
+
+    sortedIslandNames.sort((a, b) => {
+        let pA = getPriority(a), pB = getPriority(b);
+        if (pA !== pB) return pA - pB;
+        return a.localeCompare(b);
+    });
+}
+
+// ============================================================================
+// 초성(자음) 검색을 지원하는 커스텀 자동완성 드롭다운
+// 네이티브 <datalist>는 자음 검색을 지원하지 않아서, 직접 구현한 드롭다운으로 대체합니다.
+// (덤으로, 예전에 겪었던 크롬 datalist 자동완성 팝업 버그도 더 이상 발생하지 않습니다)
+// ============================================================================
+const CHOSUNG_LIST = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+
+// 완성형 한글 음절이면 초성만 추출하고, 이미 자음이거나 한글이 아니면 그대로 둠
+function toChosung(str) {
+    let result = '';
+    for (const ch of String(str || '')) {
+        const code = ch.charCodeAt(0);
+        if (code >= 0xAC00 && code <= 0xD7A3) {
+            result += CHOSUNG_LIST[Math.floor((code - 0xAC00) / (21 * 28))];
+        } else {
+            result += ch;
+        }
+    }
+    return result;
+}
+
+// 완성형 텍스트("하코")든 자음만("ㅎㅋ")이든 모두 매칭되도록, 원문 부분일치 + 초성 부분일치를 함께 검사
+function filterIslands(query) {
+    const q = String(query || '').trim();
+    if (!q) return [];
+    // 초성 비교에서는 공백을 무시해서, "ㅎㅋㅂㅅ"와 "ㅎㅋㅂ ㅅ" 둘 다 "하코번 섬"에 매칭되게 함
+    const qChosung = toChosung(q).replace(/\s/g, '');
+    return sortedIslandNames
+        .filter(name => name.includes(q) || toChosung(name).replace(/\s/g, '').includes(qChosung))
+        .slice(0, 15);
+}
+
+function renderIslandDropdown(inputId, dropdownId) {
+    const input = document.getElementById(inputId);
+    const dropdown = document.getElementById(dropdownId);
+    const matches = filterIslands(input.value);
+
+    dropdown.innerHTML = '';
+    if (matches.length === 0) {
+        dropdown.classList.add('hidden');
+        return;
+    }
+
+    matches.forEach(name => {
+        const item = document.createElement('div');
+        item.className = 'px-3 py-1.5 text-xs font-bold text-gray-800 dark:text-gray-200 hover:bg-blue-100 dark:hover:bg-blue-900/40 cursor-pointer';
+        item.textContent = name;
+        // mousedown(클릭보다 먼저 발생)에서 선택해야, input의 blur가 드롭다운을 먼저 숨기기 전에 값이 반영됩니다
+        item.onmousedown = (e) => {
+            e.preventDefault();
+            input.value = name;
+            dropdown.classList.add('hidden');
+            calcFreeRoute();
+        };
+        dropdown.appendChild(item);
+    });
+    dropdown.classList.remove('hidden');
+}
+
+// ㄳ,ㄵ,ㄶ,ㄺ,ㄻ,ㄼ,ㄽ,ㄾ,ㄿ,ㅀ,ㅄ — 겹받침 전용이라 초성으로는 절대 쓰일 수 없는 자음들.
+// 지워버리면 사용자가 입력하려던 두 자음 중 하나가 사라지므로, 원래 구성 자음 두 개로 분리합니다.
+// (예: ㅄ → ㅂㅅ, ㄳ → ㄱㅅ) — IME가 두 자음을 겹받침 한 글자로 합쳐버렸을 때를 되돌리는 것입니다.
+const CHOSUNG_JAMO_SPLIT_MAP = {
+    'ㄳ': 'ㄱㅅ', 'ㄵ': 'ㄴㅈ', 'ㄶ': 'ㄴㅎ',
+    'ㄺ': 'ㄹㄱ', 'ㄻ': 'ㄹㅁ', 'ㄼ': 'ㄹㅂ', 'ㄽ': 'ㄹㅅ', 'ㄾ': 'ㄹㅌ', 'ㄿ': 'ㄹㅍ', 'ㅀ': 'ㄹㅎ',
+    'ㅄ': 'ㅂㅅ'
+};
+const INVALID_CHOSUNG_JAMO = /[ㄳㄵㄶㄺㄻㄼㄽㄾㄿㅀㅄ]/g;
+
+function sanitizeIslandInput(input) {
+    const cursorPos = input.selectionStart;
+    const before = input.value;
+    const after = before.replace(INVALID_CHOSUNG_JAMO, ch => CHOSUNG_JAMO_SPLIT_MAP[ch]);
+    if (after === before) return;
+
+    input.value = after;
+    if (cursorPos !== null) {
+        const diff = after.length - before.length;
+        const newPos = Math.max(0, cursorPos + diff);
+        input.setSelectionRange(newPos, newPos);
+    }
+}
+
+function handleIslandInput(inputId, dropdownId) {
+    sanitizeIslandInput(document.getElementById(inputId));
+    renderIslandDropdown(inputId, dropdownId);
+    scheduleCalcFreeRoute();
+}
+
+// blur 시 즉시 숨기면 드롭다운 항목 클릭이 씹힐 수 있어, mousedown으로 먼저 처리되게 하고
+// 그 다음에 숨기면서 현재 입력값 기준으로 최종 계산까지 마무리합니다
+function onIslandInputBlur(dropdownId) {
+    setTimeout(() => {
+        const dropdown = document.getElementById(dropdownId);
+        if (dropdown) dropdown.classList.add('hidden');
+        calcFreeRoute();
+    }, 150);
+}
+
+// ============================================================================
+// 최근 목적지: 최근에 "출발"한 경로를 기억해뒀다가 클릭 한 번으로 다시 채울 수 있게 함
+// ============================================================================
+const RECENT_ROUTES_KEY = 'navRecentRoutes';
+const RECENT_ROUTES_MAX = 10;
+
+function loadRecentRoutes() {
+    try {
+        const arr = JSON.parse(localStorage.getItem(RECENT_ROUTES_KEY) || '[]');
+        return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+}
+
+function saveRecentRoutes(list) {
+    try { localStorage.setItem(RECENT_ROUTES_KEY, JSON.stringify(list)); } catch (e) {}
+}
+
+// 같은 경로가 이미 있으면 맨 앞으로 올리고(중복 방지), 최대 개수를 넘으면 오래된 것부터 버림
+function addRecentRoute(start, end) {
+    if (!start || !end) return;
+    let list = loadRecentRoutes();
+    list = list.filter(r => !(r.start === start && r.end === end));
+    list.unshift({ start, end });
+    if (list.length > RECENT_ROUTES_MAX) list = list.slice(0, RECENT_ROUTES_MAX);
+    saveRecentRoutes(list);
+    renderRecentRoutes();
+}
+
+function removeRecentRoute(index) {
+    let list = loadRecentRoutes();
+    list.splice(index, 1);
+    saveRecentRoutes(list);
+    renderRecentRoutes();
+}
+
+function selectRecentRoute(start, end) {
+    document.getElementById('freeStart').value = start;
+    document.getElementById('freeEnd').value = end;
+    calcFreeRoute();
+}
+
+function renderRecentRoutes() {
+    const list = loadRecentRoutes();
+    const container = document.getElementById('recentRoutesContainer');
+    const listEl = document.getElementById('recentRoutesList');
+    listEl.innerHTML = '';
+
+    if (list.length === 0) {
+        container.classList.add('hidden');
+        return;
+    }
+    container.classList.remove('hidden');
+
+    list.forEach((r, i) => {
+        const chip = document.createElement('span');
+        chip.className = 'inline-flex items-center gap-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-full pl-2.5 pr-1 py-1 text-[10px] font-bold text-gray-700 dark:text-gray-300';
+
+        const goBtn = document.createElement('button');
+        goBtn.className = 'hover:text-blue-600 dark:hover:text-blue-400 transition';
+        goBtn.textContent = `${r.start} → ${r.end}`;
+        goBtn.onclick = () => selectRecentRoute(r.start, r.end);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'text-gray-400 hover:text-red-500 transition px-1';
+        delBtn.title = '목록에서 삭제';
+        delBtn.textContent = '×';
+        delBtn.onclick = () => removeRecentRoute(i);
+
+        chip.appendChild(goBtn);
+        chip.appendChild(delBtn);
+        listEl.appendChild(chip);
+    });
+}
+
+// 타이핑할 때마다 즉시 계산하지 않고 한 틱 미뤄서(디바운스), 빠르게 연속 입력할 때 불필요한
+// 재계산이 겹치지 않게 합니다. (자음 검색 드롭다운 자체는 이 함수와 별개로 즉시 갱신됩니다)
+let calcFreeRouteTimer = null;
+function scheduleCalcFreeRoute() {
+    if (calcFreeRouteTimer) clearTimeout(calcFreeRouteTimer);
+    calcFreeRouteTimer = setTimeout(calcFreeRoute, 0);
+}
+
+// getIslandCoords와 동일한 방식(" 섬"/" 제도" 접미사 정규화)으로 존재 여부만 확인
+function isKnownIsland(name) {
+    let clean = String(name || "").replace(/ 섬$/, '').replace(/ 제도$/, '').trim();
+    return !!(islandCoordinates[clean] || islandCoordinates[clean + " 섬"] || islandCoordinates[clean + " 제도"]);
+}
+
+// ⭐ [버그 픽스] 입력이 비거나 무효해졌을 때, 타이머가 실행 중이면 반드시 함께 취소합니다.
+// (그냥 freeTotalSeconds만 0으로 두면, 실행 중인 카운트다운이 다음 틱에 즉시 "도착"으로 잘못 판정됨)
+function cancelRouteAndMaybeTimer() {
+    freeTotalSeconds = 0;
+    if (freeTimerInterval) resetFreeTimer(); else updateFreeRouteDisplay(0, 0);
+}
+
+function calcFreeRoute() {
+    let startVal = document.getElementById('freeStart').value.trim();
+    let endVal = document.getElementById('freeEnd').value.trim();
+
+    if (!startVal || !endVal || startVal === endVal) {
+        cancelRouteAndMaybeTimer(); return;
+    }
+
+    let isP1Valid = isKnownIsland(startVal);
+    let isP2Valid = isKnownIsland(endVal);
+    if (!isP1Valid || !isP2Valid) {
+        cancelRouteAndMaybeTimer(); return;
+    }
+
+    let dist = legDistance(startVal, endVal);
+    let currentSpeed = APP_CONFIG.SHIP_SPEED || 170;
+    let isOverloaded = document.getElementById('isOverloaded').checked;
+    let penalty = isOverloaded ? (APP_CONFIG.OVERLOAD_PENALTY || 1.6) : 1.0;
+    let isSafeTime = document.getElementById('isSafeTime').checked;
+    let safetyMargin = isSafeTime ? 1.15 : 1.0; // 안전 시간: 도착 예상 시간에 15% 여유를 더함
+    let timeMins = (dist / currentSpeed) * penalty * safetyMargin;
+    freeTotalSeconds = Math.round(timeMins * 60);
+
+    if (freeTimerInterval) {
+        resetFreeTimer(); // 실행 중인데 목적지를 바꿨다면 즉각 취소(리셋)
+    } else {
+        updateFreeRouteDisplay(0, freeTotalSeconds);
+    }
+}
+
+function updateFreeRouteDisplay(elapsed, total) {
+    let elMin = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    let elSec = String(elapsed % 60).padStart(2, '0');
+    let totMin = String(Math.floor(total / 60)).padStart(2, '0');
+    let totSec = String(total % 60).padStart(2, '0');
+    document.getElementById('freeTime').innerText = `${elMin}:${elSec} / ${totMin}:${totSec}`;
+}
+
+function toggleFreeTimer() {
+    if (freeTimerInterval) {
+        resetFreeTimer();
+    } else {
+        if (freeTotalSeconds <= 0) return showToast("⚠️ 올바른 출발지와 도착지를 먼저 선택/입력하세요!");
+
+        addRecentRoute(document.getElementById('freeStart').value.trim(), document.getElementById('freeEnd').value.trim());
+
+        freeTimerInterval = setInterval(() => {
+            freeElapsedSeconds++;
+            updateFreeRouteDisplay(freeElapsedSeconds, freeTotalSeconds);
+
+            if (freeElapsedSeconds >= freeTotalSeconds) {
+                resetFreeTimer();
+                playArrivalAlarm();
+                showToast("🏁 설정한 자유 항로 목적지에 도착했습니다!");
+                triggerArrivalAlert();
+            }
+        }, 1000);
+
+        updateTimerButtons(true);
+    }
+}
+
+function resetFreeTimer() {
+    if (freeTimerInterval) clearInterval(freeTimerInterval);
+    freeTimerInterval = null;
+    freeElapsedSeconds = 0;
+    updateFreeRouteDisplay(0, freeTotalSeconds);
+    updateTimerButtons(false);
+}
+
+function updateTimerButtons(isRunning) {
+    const btn = document.getElementById('btnFreeTimer');
+    if (!btn) return;
+    if (isRunning) {
+        btn.innerHTML = '⏹️ 취소';
+        btn.className = 'bg-orange-600 hover:bg-orange-500 text-white text-xs px-3 py-1.5 rounded shadow font-bold transition w-[72px] text-center';
+    } else {
+        btn.innerHTML = '🚀 출발';
+        btn.className = 'bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-1.5 rounded shadow font-bold transition w-[72px] text-center';
+    }
+}
+
+// ============================================================================
+// 커스텀 알람음 (다른 알람음 사용)
+// 주의: 브라우저는 보안상 선택한 파일의 실제 경로를 절대 알려주지 않고, 파일명만 알 수 있습니다.
+// "경로만 기억"하는 방식은 파일이 이 HTML과 같은 폴더에 없거나, 브라우저가 파일별 file:// 접근을
+// 세션마다 다르게 취급하면 재생이 끊길 수 있어 신뢰할 수 없습니다.
+// 그래서 파일의 실제 내용(바이트)을 IndexedDB에 저장해두고, 경로와 무관하게 항상 재생되도록 합니다.
+// ============================================================================
+let customAudioElement = null;
+let customAudioObjectURL = null;
+
+const NAV_DB_NAME = 'bdoFreeNavDB';
+const NAV_DB_STORE = 'sounds';
+const NAV_SOUND_KEY = 'customAlarmSound';
+
+function idbOpen() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(NAV_DB_NAME, 1);
+        req.onupgradeneeded = () => { req.result.createObjectStore(NAV_DB_STORE); };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function idbSaveSound(blob, name) {
+    try {
+        const db = await idbOpen();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(NAV_DB_STORE, 'readwrite');
+            tx.objectStore(NAV_DB_STORE).put({ blob, name }, NAV_SOUND_KEY);
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (e) { console.warn('알람음 파일 저장 실패:', e); }
+}
+
+async function idbLoadSound() {
+    try {
+        const db = await idbOpen();
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction(NAV_DB_STORE, 'readonly');
+            const req = tx.objectStore(NAV_DB_STORE).get(NAV_SOUND_KEY);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+        });
+    } catch (e) { return null; }
+}
+
+function handleCustomSoundFile(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    if (customAudioObjectURL) URL.revokeObjectURL(customAudioObjectURL);
+    customAudioObjectURL = URL.createObjectURL(file);
+    customAudioElement = new Audio(customAudioObjectURL);
+    document.getElementById('customSoundPath').value = file.name;
+
+    document.getElementById('useCustomSound').checked = true;
+    showToast(`🔊 알람음 "${file.name}" 등록 완료!`);
+
+    idbSaveSound(file, file.name); // 파일 내용을 통째로 저장해, 다음에 페이지를 열어도 그대로 재생 가능
+    saveNavSettings();
+}
+
+function onUseCustomSoundToggle() {
+    const useCustom = document.getElementById('useCustomSound').checked;
+    if (useCustom && !customAudioElement) {
+        showToast("⚠️ 먼저 '찾아보기'로 사운드 파일을 선택해 주세요. 선택 전까지는 기본 알람음이 재생됩니다.");
+    }
+    saveNavSettings();
+}
+
+// 도착 알람 재생: 커스텀 사운드가 등록+사용 체크되어 있으면 그것을, 아니면 기본 합성음을 재생
+function playArrivalAlarm() {
+    const useCustom = document.getElementById('useCustomSound').checked;
+    if (useCustom && customAudioElement) {
+        try {
+            customAudioElement.currentTime = 0;
+            customAudioElement.play().catch(() => playAlarmSound());
+        } catch (e) {
+            playAlarmSound();
+        }
+    } else {
+        playAlarmSound();
+    }
+}
+
+// ============================================================================
+// 도착 알림: 화면 전체 팝업 오버레이 + 탭 제목 깜빡임만 사용 (OS 알림 권한 불필요, 항상 자동 발동)
+// ============================================================================
+let titleFlashInterval = null;
+const ORIGINAL_PAGE_TITLE = document.title;
+
+function startTitleFlash() {
+    if (titleFlashInterval) return;
+    let toggle = false;
+    titleFlashInterval = setInterval(() => {
+        document.title = toggle ? ORIGINAL_PAGE_TITLE : '🔔 도착!';
+        toggle = !toggle;
+    }, 1000);
+}
+
+function stopTitleFlash() {
+    if (titleFlashInterval) { clearInterval(titleFlashInterval); titleFlashInterval = null; }
+    document.title = ORIGINAL_PAGE_TITLE;
+}
+
+function showArrivalOverlay(msg) {
+    document.getElementById('arrivalAlertMessage').textContent = msg;
+    document.getElementById('arrivalAlertOverlay').classList.remove('hidden');
+    startTitleFlash();
+}
+
+function dismissArrivalOverlay() {
+    document.getElementById('arrivalAlertOverlay').classList.add('hidden');
+    stopTitleFlash();
+}
+
+// 도착 시점마다 항상 자동으로 발동
+function triggerArrivalAlert() {
+    showArrivalOverlay("도착했습니다.");
+}
+
+function playAlarmSound() {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const playTone = (freq, startTime, duration) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, startTime);
+            gain.gain.setValueAtTime(1, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(startTime);
+            osc.stop(startTime + duration);
+        };
+        playTone(880, ctx.currentTime, 0.3);
+        playTone(1108.73, ctx.currentTime + 0.15, 0.5);
+    } catch(e) { console.warn("웹 오디오 에러"); }
+}
+
+function showToast(message) {
+    const toast = document.getElementById('toastMessage');
+    if (!toast) return;
+    toast.innerText = message;
+    toast.classList.remove('opacity-0');
+    setTimeout(() => toast.classList.add('opacity-0'), 2500);
+}
+
+// ============================================================================
+// 다크 모드 / 라이트 모드
+// ============================================================================
+function applyTheme(isDark) {
+    document.documentElement.classList.toggle('dark', isDark);
+    const btn = document.getElementById('themeToggleBtn');
+    if (btn) btn.textContent = isDark ? '☀️ 라이트 모드' : '🌙 다크 모드';
+}
+
+function toggleTheme() {
+    const isDark = !document.documentElement.classList.contains('dark');
+    applyTheme(isDark);
+    try { localStorage.setItem('navTheme', isDark ? 'dark' : 'light'); } catch (e) {}
+}
+
+// head의 인라인 스크립트가 <html>에 이미 dark 클래스를 선반영해뒀으므로,
+// 여기서는 그 상태에 맞춰 토글 버튼 라벨만 동기화합니다.
+function initTheme() {
+    applyTheme(document.documentElement.classList.contains('dark'));
+}
+
+// ============================================================================
+// 로컬 저장 (선박 배속 / 알람음 경로 / 커스텀 메세지 값을 브라우저에 기억)
+// ============================================================================
+
+// 선박 속도/가속 / 알람음 사용여부를 localStorage에 저장
+// (알람음 파일 그 자체는 IndexedDB에 별도 저장 — idbSaveSound 참고)
+function saveNavSettings() {
+    try {
+        localStorage.setItem('navShipBaseSpeed', document.getElementById('mainShipBaseSpeed').value);
+        localStorage.setItem('navShipAccel', document.getElementById('mainShipAccel').value);
+        localStorage.setItem('navUseCustomSound', document.getElementById('useCustomSound').checked ? '1' : '0');
+    } catch (e) { console.warn('설정 저장 실패:', e); }
+}
+
+// 페이지 로드 시 저장된 값들을 복원
+async function loadNavSettings() {
+    try {
+        // ⭐ [버그 픽스] 이 값은 반드시 다른 어떤 저장(saveNavSettings) 호출보다도 먼저 읽어둬야 합니다.
+        // syncSpeedToConfig()가 내부에서 saveNavSettings()를 호출하는데, 그 시점엔 체크박스가
+        // 아직 복원 전(기본값=꺼짐)이라 저장된 값을 그대로 덮어써버리는 문제가 있었습니다.
+        const savedUseCustomSound = localStorage.getItem('navUseCustomSound') === '1';
+
+        let savedBaseSpeed = localStorage.getItem('navShipBaseSpeed');
+        let savedAccel = localStorage.getItem('navShipAccel');
+        if (!savedBaseSpeed && !savedAccel) {
+            // 구버전(단일 "배속" 값)에서 마이그레이션: 가속 100%(기본값)로 간주하고 그대로 속도값으로 이어받음
+            const legacySpeed = localStorage.getItem('navShipSpeed');
+            if (legacySpeed) { savedBaseSpeed = legacySpeed; savedAccel = '100'; }
+        }
+        if (savedBaseSpeed) document.getElementById('mainShipBaseSpeed').value = savedBaseSpeed;
+        if (savedAccel) document.getElementById('mainShipAccel').value = savedAccel;
+        syncSpeedToConfig(true); // 로드 도중이므로 저장은 건너뜀 (아래 최종 저장에서 한 번에 정리)
+
+        // 알람음 파일은 IndexedDB에서 실제 내용을 복원 (경로에 의존하지 않음)
+        const stored = await idbLoadSound();
+        if (stored && stored.blob) {
+            if (customAudioObjectURL) URL.revokeObjectURL(customAudioObjectURL);
+            customAudioObjectURL = URL.createObjectURL(stored.blob);
+            customAudioElement = new Audio(customAudioObjectURL);
+            document.getElementById('customSoundPath').value = stored.name || '(저장된 사운드 파일)';
+            document.getElementById('useCustomSound').checked = savedUseCustomSound;
+        } else {
+            document.getElementById('useCustomSound').checked = false;
+        }
+
+        // ⭐ 모든 필드가 최종 복원된 뒤, 한 번만 정식으로 저장 — 위에서처럼 중간 단계 값으로
+        // localStorage가 덮어써지는 일이 없도록 로드 시퀀스의 마지막에서만 저장합니다.
+        saveNavSettings();
+    } catch (e) {
+        console.warn('설정 복원 실패:', e);
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    initTheme();
+    initFreeRouteSelects();
+    loadNavSettings();
+    renderRecentRoutes();
+});
+</script>
+</body>
+</html>
