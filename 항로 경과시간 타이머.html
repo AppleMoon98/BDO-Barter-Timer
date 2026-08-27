@@ -526,11 +526,18 @@ function calcFreeRoute() {
     let isSafeTime = document.getElementById('isSafeTime').checked;
     let safetyMargin = isSafeTime ? 1.15 : 1.0; // 안전 시간: 도착 예상 시간에 15% 여유를 더함
     let timeMins = (dist / currentSpeed) * penalty * safetyMargin;
-    freeTotalSeconds = Math.round(timeMins * 60);
+    let newTotalSeconds = Math.round(timeMins * 60);
 
     if (freeTimerInterval) {
-        resetFreeTimer(); // 실행 중인데 목적지를 바꿨다면 즉각 취소(리셋)
+        // ⭐ [버그 픽스] 출발 버튼 클릭이 입력창의 blur를 유발해 이 함수가 재호출되면서,
+        // 경로가 그대로인데도 방금 시작한 타이머가 즉시 리셋되던 문제를 방지합니다.
+        // 실제로 계산 결과(소요시간)가 달라졌을 때만 "목적지를 바꿨다"고 간주해 리셋합니다.
+        if (newTotalSeconds !== freeTotalSeconds) {
+            freeTotalSeconds = newTotalSeconds;
+            resetFreeTimer();
+        }
     } else {
+        freeTotalSeconds = newTotalSeconds;
         updateFreeRouteDisplay(0, freeTotalSeconds);
     }
 }
@@ -558,7 +565,7 @@ function toggleFreeTimer() {
             if (freeElapsedSeconds >= freeTotalSeconds) {
                 resetFreeTimer();
                 playArrivalAlarm();
-                showToast("🏁 설정한 자유 항로 목적지에 도착했습니다!");
+                showToast("설정한 도착시간이 되었습니다!");
                 triggerArrivalAlert();
             }
         }, 1000);
@@ -579,10 +586,10 @@ function updateTimerButtons(isRunning) {
     const btn = document.getElementById('btnFreeTimer');
     if (!btn) return;
     if (isRunning) {
-        btn.innerHTML = '⏹️ 취소';
+        btn.innerHTML = '취소';
         btn.className = 'bg-orange-600 hover:bg-orange-500 text-white text-xs px-3 py-1.5 rounded shadow font-bold transition w-[72px] text-center';
     } else {
-        btn.innerHTML = '🚀 출발';
+        btn.innerHTML = '출발';
         btn.className = 'bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-1.5 rounded shadow font-bold transition w-[72px] text-center';
     }
 }
