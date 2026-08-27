@@ -492,11 +492,12 @@ function saveRecentRoutes(list) {
     try { localStorage.setItem(RECENT_ROUTES_KEY, JSON.stringify(list)); } catch (e) {}
 }
 
-// 같은 경로가 이미 있으면 맨 앞으로 올리고(중복 방지), 최대 개수를 넘으면 오래된 것부터 버림
+// 같은 경로(출발↔도착이 뒤바뀐 것도 동일 항로로 취급)가 이미 있으면 맨 앞으로 올리고(중복 방지),
+// 최대 개수를 넘으면 오래된 것부터 버림
 function addRecentRoute(start, end) {
     if (!start || !end) return;
     let list = loadRecentRoutes();
-    list = list.filter(r => !(r.start === start && r.end === end));
+    list = list.filter(r => !(r.start === start && r.end === end) && !(r.start === end && r.end === start));
     list.unshift({ start, end });
     if (list.length > RECENT_ROUTES_MAX) list = list.slice(0, RECENT_ROUTES_MAX);
     saveRecentRoutes(list);
