@@ -653,7 +653,7 @@ function handleCustomSoundFile(event) {
 function onUseCustomSoundToggle() {
     const useCustom = document.getElementById('useCustomSound').checked;
     if (useCustom && !customAudioElement) {
-        showToast("⚠️ 먼저 '찾아보기'로 사운드 파일을 선택해 주세요. 선택 전까지는 기본 알람음이 재생됩니다.");
+        showToast("⚠️ 먼저 '가져오기'로 사운드 파일을 선택해 주세요. 선택 전까지는 기본 알람음이 재생됩니다.");
     }
     saveNavSettings();
 }
