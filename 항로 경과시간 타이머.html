@@ -355,22 +355,51 @@ function qwertyToHangul(str) {
     return result;
 }
 
-// 완성형 텍스트("하코")든 자음만("ㅎㅋ")이든, 한/영 전환을 깜빡한 영타("dfd")든 모두 매칭되도록,
-// 원문 부분일치 + 초성 부분일치 + 두벌식 자모 변환 부분일치를 함께 검사
+// 완성형 한글 음절을 초성+중성+종성 자모로 풀어헤침 (종성 없으면 빈 문자열, 한글이 아니면 그대로 둠)
+const JUNG_LIST = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ'];
+const JONG_LIST = ['','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+function decomposeToJamo(str) {
+    let result = '';
+    for (const ch of String(str || '')) {
+        const code = ch.charCodeAt(0);
+        if (code >= 0xAC00 && code <= 0xD7A3) {
+            const idx = code - 0xAC00;
+            result += CHOSUNG_LIST[Math.floor(idx / (21 * 28))]
+                    + JUNG_LIST[Math.floor((idx % (21 * 28)) / 28)]
+                    + JONG_LIST[idx % 28];
+        } else {
+            result += ch;
+        }
+    }
+    return result;
+}
+
+// 완성형 텍스트("하코")든 자음만("ㅎㅋ")이든, 한/영 전환을 깜빡한 영타("gkzhqj"→하코번을 치던 중)든
+// 모두 매칭되도록, 원문 부분일치 + 초성 부분일치 + 두벌식 자모 부분일치를 함께 검사
 function filterIslands(query) {
     const q = String(query || '').trim();
     // 빈 검색어(입력창에 포커스만 준 상태)일 땐, 정렬된 목록 맨 앞(자주 쓰는 거점) 그대로 보여줌
     if (!q) return sortedIslandNames.slice(0, 15);
     // 초성 비교에서는 공백을 무시해서, "ㅎㅋㅂㅅ"와 "ㅎㅋㅂ ㅅ" 둘 다 "하코번 섬"에 매칭되게 함
     const qChosung = toChosung(q).replace(/\s/g, '');
-    const qFromQwerty = toChosung(qwertyToHangul(q)).replace(/\s/g, '');
+
+    // 한/영 전환을 깜빡하고 두벌식 자판 그대로 친 검색어 대응: 이름을 초성+중성+종성 자모로 미리
+    // 풀어헤쳐두고, 검색어도 같은 방식(자모 단위)으로 비교하면 음절 경계 재조합 없이도 아직 다 안 친
+    // 마지막 글자까지 정확히 매칭됩니다 (예: "gkzhqj" → "ㅎㅏㅋㅗㅂㅓ" → "하코번 섬"의 자모 앞부분과 일치).
+    // 단, 모음이 하나도 없는 경우("dfd"→"ㅇㄹㅇ")는 완성된 단어가 아니라 초성만 입력한 것으로 보고,
+    // 초성끼리 비교합니다 — 자모 스트림으로 비교하면 모음이 없어 음절이 안 갈라져서 매칭이 안 됩니다.
+    const qwertyJamo = qwertyToHangul(q).replace(/\s/g, '');
+    const qwertyHasVowel = Array.from(qwertyJamo).some(ch => JUNG_LIST.includes(ch));
 
     const matches = [];
     for (const name of sortedIslandNames) {
         const nameChosung = toChosung(name).replace(/\s/g, '');
-        const hit = name.includes(q) || nameChosung.includes(qChosung) || nameChosung.includes(qFromQwerty);
+        const nameJamo = decomposeToJamo(name).replace(/\s/g, '');
+        const qwertyHit = qwertyHasVowel ? nameJamo.includes(qwertyJamo) : nameChosung.includes(qwertyJamo);
+        const hit = name.includes(q) || nameChosung.includes(qChosung) || qwertyHit;
         if (hit) {
-            const startsWithQuery = name.startsWith(q) || nameChosung.startsWith(qChosung) || nameChosung.startsWith(qFromQwerty);
+            const qwertyStarts = qwertyHasVowel ? nameJamo.startsWith(qwertyJamo) : nameChosung.startsWith(qwertyJamo);
+            const startsWithQuery = name.startsWith(q) || nameChosung.startsWith(qChosung) || qwertyStarts;
             matches.push({ name, startsWithQuery });
         }
     }
