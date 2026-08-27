@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BDO 항로 경과시간 타이머</title>
+<link rel="icon" href="icon.ico" type="image/x-icon">
 <script>
   // 테마 깜빡임 방지: Tailwind가 로드되기 전에 저장된 테마(없으면 시스템 설정)를 먼저 적용
   (function() {
@@ -53,7 +54,7 @@
 
         <div class="flex flex-col gap-2 mb-4 bg-gray-100 dark:bg-gray-900/50 p-2 rounded border border-gray-200 dark:border-gray-700 shadow-inner">
             <div class="flex flex-wrap items-center gap-3">
-                <div class="flex items-center gap-2" title="배속 = 속도 × 가속 / 100">
+                <div class="flex items-center gap-2" title="배의 속도와 가속을 넣어주세요.">
                     <label class="text-[11px] text-blue-700 dark:text-blue-300 font-bold">속도</label>
                     <input type="number" id="mainShipBaseSpeed" value="170" step="0.1" class="bg-white dark:bg-black border border-blue-500 text-gray-900 dark:text-white px-2 py-1.5 rounded w-16 text-sm text-center font-bold hide-arrows focus:outline-none focus:border-blue-300" onchange="syncSpeedToConfig()">
                     <span class="text-gray-400 dark:text-gray-500 font-bold text-xs">×</span>
@@ -62,12 +63,18 @@
                     <span class="text-gray-400 dark:text-gray-500 font-bold text-xs">%</span>
                     <span class="text-[10px] text-gray-500 dark:text-gray-500 font-bold" id="effectiveSpeedDisplay">(배속 170)</span>
                 </div>
-                <label class="flex items-center gap-1.5 text-[11px] font-bold text-red-600 dark:text-red-400 cursor-pointer border-l border-gray-300 dark:border-gray-700 pl-3" title="체크 시 과적 페널티(x1.6)가 이동시간에 곱해집니다">
+                <label class="flex items-center gap-1.5 text-[11px] font-bold text-red-600 dark:text-red-400 cursor-pointer border-l border-gray-300 dark:border-gray-700 pl-3" title="체크 시 과적으로 그냥 도착시간에 1.6 곱해집니다.">
                     <input type="checkbox" id="isOverloaded" onchange="calcFreeRoute()" class="w-3.5 h-3.5 accent-red-500 cursor-pointer"> 🔴 과적
                 </label>
-                <label class="flex items-center gap-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-400 cursor-pointer border-l border-gray-300 dark:border-gray-700 pl-3" title="체크 시 도착 예상 시간에 x1.15(15% 여유)를 곱해서 더 넉넉하게 안내합니다">
+                <label class="flex items-center gap-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-400 cursor-pointer border-l border-gray-300 dark:border-gray-700 pl-3" title="도착하고나서 보고싶은 사람을 위한 안전 시간입니다.">
                     <input type="checkbox" id="isSafeTime" onchange="calcFreeRoute()" class="w-3.5 h-3.5 accent-amber-500 cursor-pointer"> 🟢 안전 시간
                 </label>
+                <span class="flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                    <input type="text" inputmode="numeric" id="safeTimePercent" value="15" maxlength="5"
+                        oninput="sanitizeSafeTimePercentInput(this)" onchange="calcFreeRoute(); saveNavSettings()"
+                        title="안전 시간 여유 비율(%). 음수를 넣으면 오히려 더 짧게 안내합니다."
+                        class="bg-white dark:bg-black border border-amber-500 text-gray-900 dark:text-white px-1.5 py-1 rounded w-11 text-xs text-center font-bold outline-none focus:border-amber-300">%
+                </span>
             </div>
             <div class="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-200 dark:border-gray-700">
                 <label class="flex items-center gap-1.5 text-[11px] font-bold text-purple-600 dark:text-purple-400 cursor-pointer" title="체크 시 도착 알람으로 기본 합성음 대신 선택한 사운드 파일을 재생합니다">
@@ -89,7 +96,8 @@
                         oninput="handleIslandInput('freeStart','freeStartDropdown')"
                         onfocus="renderIslandDropdown('freeStart','freeStartDropdown')"
                         onblur="onIslandInputBlur('freeStartDropdown')"
-                        class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-300 rounded p-2 outline-none font-bold text-xs focus:border-blue-500 transition">
+                        class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-300 rounded pl-2 pr-6 py-2 outline-none font-bold text-xs focus:border-blue-500 transition">
+                    <span title="어차피 도착이랑 출발이랑 위치 바껴도 시간은 똑같으니까 대충 섬만 적으면 됩니다." class="absolute right-1.5 top-1/2 -translate-y-1/2 z-10 text-gray-400 dark:text-gray-500 text-[11px] font-bold cursor-help select-none">ⓘ</span>
                     <div id="freeStartDropdown" class="hidden absolute z-30 top-full left-0 right-0 mt-1 max-h-52 overflow-y-auto bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl"></div>
                 </div>
                 <span class="text-gray-500 dark:text-gray-500 font-bold shrink-0">➔</span>
@@ -98,11 +106,12 @@
                         oninput="handleIslandInput('freeEnd','freeEndDropdown')"
                         onfocus="renderIslandDropdown('freeEnd','freeEndDropdown')"
                         onblur="onIslandInputBlur('freeEndDropdown')"
-                        class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-300 rounded p-2 outline-none font-bold text-xs focus:border-blue-500 transition">
+                        class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-300 rounded pl-2 pr-6 py-2 outline-none font-bold text-xs focus:border-blue-500 transition">
+                    <span title="" class="absolute right-1.5 top-1/2 -translate-y-1/2 z-10 text-gray-400 dark:text-gray-500 text-[11px] font-bold cursor-help select-none">ⓘ</span>
                     <div id="freeEndDropdown" class="hidden absolute z-30 top-full left-0 right-0 mt-1 max-h-52 overflow-y-auto bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl"></div>
                 </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 ml-auto">
                 <div class="text-yellow-600 dark:text-yellow-400 font-mono font-bold text-sm tracking-wider bg-gray-200 dark:bg-black/50 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-700" id="freeTime">00:00 / 00:00</div>
                 <button id="btnFreeTimer" onclick="toggleFreeTimer()" class="bg-green-600 dark:bg-green-600 hover:bg-gray-300 dark:hover:bg-gray-600 text-white dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition">출발</button>
                 <button onclick="resetFreeTimer()" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition">리셋</button>
@@ -461,6 +470,20 @@ function sanitizeIslandInput(input) {
     }
 }
 
+// 안전 시간 % 입력란: 숫자와 맨 앞의 '-'(음수 부호)만 허용
+function sanitizeSafeTimePercentInput(input) {
+    const cursorPos = input.selectionStart;
+    const before = input.value;
+    let after = before.replace(/[^0-9-]/g, '').replace(/(?!^)-/g, '');
+    if (after === before) return;
+
+    input.value = after;
+    if (cursorPos !== null) {
+        const newPos = Math.max(0, cursorPos + (after.length - before.length));
+        input.setSelectionRange(newPos, newPos);
+    }
+}
+
 function handleIslandInput(inputId, dropdownId) {
     sanitizeIslandInput(document.getElementById(inputId));
     renderIslandDropdown(inputId, dropdownId);
@@ -584,7 +607,9 @@ function calcFreeRoute() {
     let isOverloaded = document.getElementById('isOverloaded').checked;
     let penalty = isOverloaded ? (APP_CONFIG.OVERLOAD_PENALTY || 1.6) : 1.0;
     let isSafeTime = document.getElementById('isSafeTime').checked;
-    let safetyMargin = isSafeTime ? 1.15 : 1.0; // 안전 시간: 도착 예상 시간에 15% 여유를 더함
+    let safeTimePercent = parseFloat(document.getElementById('safeTimePercent').value);
+    if (isNaN(safeTimePercent)) safeTimePercent = 0;
+    let safetyMargin = isSafeTime ? 1 + (safeTimePercent / 100) : 1.0; // 안전 시간: 도착 예상 시간에 n% 여유를 더함
     let timeMins = (dist / currentSpeed) * penalty * safetyMargin;
     freeTotalSeconds = Math.round(timeMins * 60);
     updateFreeRouteDisplay(0, freeTotalSeconds);
@@ -606,9 +631,11 @@ function toggleFreeTimer() {
 
         addRecentRoute(document.getElementById('freeStart').value.trim(), document.getElementById('freeEnd').value.trim());
 
+        updateCountdownTitle();
         freeTimerInterval = setInterval(() => {
             freeElapsedSeconds++;
             updateFreeRouteDisplay(freeElapsedSeconds, freeTotalSeconds);
+            updateCountdownTitle();
 
             if (freeElapsedSeconds >= freeTotalSeconds) {
                 resetFreeTimer();
@@ -622,12 +649,21 @@ function toggleFreeTimer() {
     }
 }
 
+// 남은 시간을 탭 제목으로 표시 (다른 탭/창을 보고 있어도 확인 가능)
+function updateCountdownTitle() {
+    const remaining = Math.max(0, freeTotalSeconds - freeElapsedSeconds);
+    const min = String(Math.floor(remaining / 60)).padStart(2, '0');
+    const sec = String(remaining % 60).padStart(2, '0');
+    document.title = `⏳ ${min}:${sec} 남음`;
+}
+
 function resetFreeTimer() {
     if (freeTimerInterval) clearInterval(freeTimerInterval);
     freeTimerInterval = null;
     freeElapsedSeconds = 0;
     updateFreeRouteDisplay(0, freeTotalSeconds);
     updateTimerButtons(false);
+    document.title = ORIGINAL_PAGE_TITLE;
 }
 
 function updateTimerButtons(isRunning) {
@@ -825,6 +861,7 @@ function saveNavSettings() {
     try {
         localStorage.setItem('navShipBaseSpeed', document.getElementById('mainShipBaseSpeed').value);
         localStorage.setItem('navShipAccel', document.getElementById('mainShipAccel').value);
+        localStorage.setItem('navSafeTimePercent', document.getElementById('safeTimePercent').value);
         localStorage.setItem('navUseCustomSound', document.getElementById('useCustomSound').checked ? '1' : '0');
     } catch (e) { console.warn('설정 저장 실패:', e); }
 }
@@ -846,6 +883,8 @@ async function loadNavSettings() {
         }
         if (savedBaseSpeed) document.getElementById('mainShipBaseSpeed').value = savedBaseSpeed;
         if (savedAccel) document.getElementById('mainShipAccel').value = savedAccel;
+        const savedSafeTimePercent = localStorage.getItem('navSafeTimePercent');
+        if (savedSafeTimePercent !== null) document.getElementById('safeTimePercent').value = savedSafeTimePercent;
         syncSpeedToConfig(true); // 로드 도중이므로 저장은 건너뜀 (아래 최종 저장에서 한 번에 정리)
 
         // 알람음 파일은 IndexedDB에서 실제 내용을 복원 (경로에 의존하지 않음)
