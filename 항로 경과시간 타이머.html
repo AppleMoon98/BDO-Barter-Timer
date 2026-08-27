@@ -293,7 +293,11 @@ function syncSpeedToConfig(skipSave) {
 // ============================================================================
 let freeTimerInterval = null;
 let freeTotalSeconds = 0;
-let freeElapsedSeconds = 0;
+// 도착 예정 시각(epoch ms). 매 틱마다 "지금까지 몇 초 지났나"를 세는 대신 이 값 기준으로
+// 남은 시간을 다시 계산합니다 — 백그라운드 탭에서 setInterval이 지연/스로틀링되어도 화면엔
+// 항상 정확한 시간이 뜨고, localStorage에 같이 저장해두면 탭이 새로고침돼도 이어서 카운트할 수 있습니다.
+let freeArrivalTimestamp = null;
+const ACTIVE_TIMER_KEY = 'navActiveTimer';
 
 // 같은 위치를 가리키는 별칭 중, 자동완성 목록에는 정식 명칭만 노출하고 나머지는 숨김
 //  - 깊은 밤          → 정식 명칭: 깊은 밤의 항구
@@ -634,34 +638,82 @@ function toggleFreeTimer() {
 
         addRecentRoute(document.getElementById('freeStart').value.trim(), document.getElementById('freeEnd').value.trim());
 
-        updateCountdownTitle();
-        freeTimerInterval = setInterval(() => {
-            freeElapsedSeconds++;
-            updateFreeRouteDisplay(freeElapsedSeconds, freeTotalSeconds);
-            updateCountdownTitle();
-
-            if (freeElapsedSeconds >= freeTotalSeconds) {
-                resetFreeTimer();
-                playArrivalAlarm();
-                showToast("설정한 도착시간이 되었습니다!");
-                triggerArrivalAlert();
-            }
-        }, 1000);
-
+        freeArrivalTimestamp = Date.now() + freeTotalSeconds * 1000;
+        saveActiveTimer();
+        tickFreeTimer();
+        freeTimerInterval = setInterval(tickFreeTimer, 1000);
         updateTimerButtons(true);
     }
 }
 
+// 벽시계(Date.now()) 기준으로 남은 시간을 다시 계산해서 화면/탭 제목을 갱신하고, 도착 여부를 판정합니다.
+// setInterval 틱 자체가 밀려도(백그라운드 탭 스로틀링) 이 함수가 실행되는 순간의 실제 시각으로
+// 계산하므로 항상 정확합니다. 탭이 다시 활성화될 때(visibilitychange)도 즉시 호출해 바로 따라잡습니다.
+function tickFreeTimer() {
+    const remaining = Math.max(0, Math.round((freeArrivalTimestamp - Date.now()) / 1000));
+    updateFreeRouteDisplay(freeTotalSeconds - remaining, freeTotalSeconds);
+    updateCountdownTitle(remaining);
+
+    if (remaining <= 0) {
+        resetFreeTimer();
+        playArrivalAlarm();
+        showToast("설정한 도착시간이 되었습니다!");
+        triggerArrivalAlert();
+    }
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && freeTimerInterval) tickFreeTimer();
+});
+
 // 남은 시간을 탭 제목으로 표시 (다른 탭/창을 보고 있어도 확인 가능)
-function updateCountdownTitle() {
-    const remaining = Math.max(0, freeTotalSeconds - freeElapsedSeconds);
+function updateCountdownTitle(remaining) {
     document.title = `⏳ ${formatMMSS(remaining)} 남음`;
+}
+
+function saveActiveTimer() {
+    try {
+        localStorage.setItem(ACTIVE_TIMER_KEY, JSON.stringify({
+            arrivalTimestamp: freeArrivalTimestamp,
+            totalSeconds: freeTotalSeconds,
+            start: document.getElementById('freeStart').value.trim(),
+            end: document.getElementById('freeEnd').value.trim()
+        }));
+    } catch (e) {}
+}
+
+function clearActiveTimer() {
+    try { localStorage.removeItem(ACTIVE_TIMER_KEY); } catch (e) {}
+}
+
+// 페이지가 (재)로드될 때 진행 중이던 타이머가 있으면 이어서 재개합니다.
+// 탭이 브라우저에 의해 통째로 새로고침(메모리 세이버 등)되어도 카운트가 끊기지 않게 하기 위함입니다.
+function restoreActiveTimer() {
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem(ACTIVE_TIMER_KEY) || 'null'); } catch (e) { saved = null; }
+    if (!saved || !saved.arrivalTimestamp || !saved.totalSeconds) return;
+
+    if (saved.arrivalTimestamp <= Date.now()) {
+        // 탭이 비활성/새로고침된 사이에 이미 도착 시간이 지나버림
+        clearActiveTimer();
+        showToast("⏳ 탭이 비활성 상태인 동안 설정한 도착시간이 지났습니다.");
+        return;
+    }
+
+    document.getElementById('freeStart').value = saved.start || '';
+    document.getElementById('freeEnd').value = saved.end || '';
+    freeTotalSeconds = saved.totalSeconds;
+    freeArrivalTimestamp = saved.arrivalTimestamp;
+    tickFreeTimer();
+    freeTimerInterval = setInterval(tickFreeTimer, 1000);
+    updateTimerButtons(true);
 }
 
 function resetFreeTimer() {
     if (freeTimerInterval) clearInterval(freeTimerInterval);
     freeTimerInterval = null;
-    freeElapsedSeconds = 0;
+    freeArrivalTimestamp = null;
+    clearActiveTimer();
     updateFreeRouteDisplay(0, freeTotalSeconds);
     updateTimerButtons(false);
     document.title = ORIGINAL_PAGE_TITLE;
@@ -912,6 +964,7 @@ window.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initFreeRouteSelects();
     loadNavSettings();
+    restoreActiveTimer();
     renderRecentRoutes();
 });
 </script>
