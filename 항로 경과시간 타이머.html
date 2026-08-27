@@ -82,6 +82,7 @@
                 </label>
                 <input type="text" id="customSoundPath" readonly placeholder="선택된 사운드 파일 없음" title="브라우저 보안 정책상 실제 경로 대신 파일명만 표시됩니다. 재생에는 영향 없습니다." class="bg-white dark:bg-black border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 px-2 py-1.5 rounded text-[11px] w-48 outline-none cursor-default">
                 <button onclick="document.getElementById('customSoundFileInput').click()" class="bg-purple-700 hover:bg-purple-600 text-white text-[11px] px-2.5 py-1.5 rounded shadow font-bold transition">📂 가져오기</button>
+                <button onclick="previewAlarmSound()" title="현재 설정대로 도착 알람을 미리 들어봅니다. 다른 알람음이 등록/사용 중이 아니면 기본 알람음이 재생됩니다." class="bg-gray-600 hover:bg-gray-500 text-white text-[11px] px-2.5 py-1.5 rounded shadow font-bold transition">🔈 들어보기</button>
                 <input type="file" id="customSoundFileInput" accept="audio/*" class="hidden" onchange="handleCustomSoundFile(event)">
             </div>
         </div>
@@ -848,6 +849,11 @@ function playArrivalAlarm() {
     } else {
         playAlarmSound();
     }
+}
+
+// "들어보기" 버튼: 실제 도착 알람과 동일한 조건(체크 여부 + 등록 여부)으로 미리 재생해봄
+function previewAlarmSound() {
+    playArrivalAlarm();
 }
 
 // ============================================================================
