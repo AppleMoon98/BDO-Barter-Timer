@@ -343,7 +343,8 @@ function toChosung(str) {
 // 완성형 텍스트("하코")든 자음만("ㅎㅋ")이든 모두 매칭되도록, 원문 부분일치 + 초성 부분일치를 함께 검사
 function filterIslands(query) {
     const q = String(query || '').trim();
-    if (!q) return [];
+    // 빈 검색어(입력창에 포커스만 준 상태)일 땐, 정렬된 목록 맨 앞(자주 쓰는 거점) 그대로 보여줌
+    if (!q) return sortedIslandNames.slice(0, 15);
     // 초성 비교에서는 공백을 무시해서, "ㅎㅋㅂㅅ"와 "ㅎㅋㅂ ㅅ" 둘 다 "하코번 섬"에 매칭되게 함
     const qChosung = toChosung(q).replace(/\s/g, '');
     return sortedIslandNames
