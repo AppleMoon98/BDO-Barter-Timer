@@ -114,8 +114,9 @@
             </div>
             <div class="flex items-center gap-2 ml-auto">
                 <div class="text-yellow-600 dark:text-yellow-400 font-mono font-bold text-sm tracking-wider bg-gray-200 dark:bg-black/50 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-700" id="freeTime">00:00 / 00:00</div>
-                <button id="btnFreeTimer" onclick="toggleFreeTimer()" class="bg-green-600 dark:bg-green-600 hover:bg-gray-300 dark:hover:bg-gray-600 text-white dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition">출발</button>
-                <button onclick="resetFreeTimer()" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition">리셋</button>
+                <button id="btnFreeTimer" onclick="toggleFreeTimer()" class="bg-green-600 dark:bg-green-600 hover:bg-gray-300 dark:hover:bg-gray-600 text-white dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center">출발</button>
+                <button onclick="resetFreeTimer()" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center">리셋</button>
+                <button id="btnNewDestination" onclick="swapToNewDestination()" disabled class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-200 dark:disabled:hover:bg-gray-700">새 목적지</button>
             </div>
         </div>
 
@@ -611,7 +612,26 @@ function cancelRouteAndMaybeTimer() {
 
 // ⭐ 이미 출발한(실행 중인) 타이머는 목적지/배속/과적/안전시간 등 어떤 설정을 바꿔도
 // 자동으로 재계산·리셋되지 않습니다. 취소하려면 "취소" 버튼을 명시적으로 눌러야 합니다.
+// 출발/도착 섬에 모두 값이 있을 때만 "새 목적지" 버튼을 활성화합니다.
+function updateNewDestinationButtonState() {
+    const btn = document.getElementById('btnNewDestination');
+    if (!btn) return;
+    const startVal = document.getElementById('freeStart').value.trim();
+    const endVal = document.getElementById('freeEnd').value.trim();
+    btn.disabled = !(startVal && endVal);
+}
+
+// 도착 섬에 적힌 값을 출발 섬으로 옮기고 도착 섬은 비워서, 다음 항로를 이어서 입력하기 쉽게 합니다.
+function swapToNewDestination() {
+    const startInput = document.getElementById('freeStart');
+    const endInput = document.getElementById('freeEnd');
+    startInput.value = endInput.value;
+    endInput.value = '';
+    calcFreeRoute();
+}
+
 function calcFreeRoute() {
+    updateNewDestinationButtonState();
     if (freeTimerInterval) return;
 
     let startVal = document.getElementById('freeStart').value.trim();
@@ -719,6 +739,7 @@ function restoreActiveTimer() {
 
     document.getElementById('freeStart').value = saved.start || '';
     document.getElementById('freeEnd').value = saved.end || '';
+    updateNewDestinationButtonState();
     freeTotalSeconds = saved.totalSeconds;
     freeArrivalTimestamp = saved.arrivalTimestamp;
     tickFreeTimer();
@@ -741,10 +762,10 @@ function updateTimerButtons(isRunning) {
     if (!btn) return;
     if (isRunning) {
         btn.innerHTML = '취소';
-        btn.className = 'bg-orange-600 hover:bg-orange-500 text-white text-xs px-3 py-1.5 rounded shadow font-bold transition w-[72px] text-center';
+        btn.className = 'bg-orange-600 hover:bg-orange-500 text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center';
     } else {
         btn.innerHTML = '출발';
-        btn.className = 'bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-1.5 rounded shadow font-bold transition w-[72px] text-center';
+        btn.className = 'bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center';
     }
 }
 
