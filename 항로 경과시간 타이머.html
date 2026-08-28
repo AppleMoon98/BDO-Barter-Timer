@@ -116,7 +116,6 @@
                 <div class="text-yellow-600 dark:text-yellow-400 font-mono font-bold text-sm tracking-wider bg-gray-200 dark:bg-black/50 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-700" id="freeTime">00:00 / 00:00</div>
                 <button id="btnFreeTimer" onclick="toggleFreeTimer()" class="bg-green-600 dark:bg-green-600 hover:bg-gray-300 dark:hover:bg-gray-600 text-white dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center">출발</button>
                 <button onclick="resetFreeTimer()" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center">리셋</button>
-                <button id="btnNewDestination" onclick="swapToNewDestination()" disabled class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-200 dark:disabled:hover:bg-gray-700">새 목적지</button>
             </div>
         </div>
 
@@ -678,6 +677,7 @@ function toggleFreeTimer() {
         tickFreeTimer();
         freeTimerInterval = setInterval(tickFreeTimer, 1000);
         updateTimerButtons(true);
+        swapToNewDestination();
     }
 }
 
