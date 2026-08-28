@@ -237,25 +237,9 @@ window.routeCalibrations = { ...defaultRouteCalibrations, ...safeParse('bdoRoute
 
 const APP_CONFIG = { SHIP_SPEED: 170, OVERLOAD_PENALTY: 1.6 }; // OVERLOAD_PENALTY: 원본 인게임 기본 과적 페널티(1.6배)
 
-// ============================================================================
-// 거리/시간 계산 로직 (원본 legDistance / applyOceanCurrent / getIslandCoords 동일 이식)
-// ============================================================================
-// 같은 위치를 가리키는 별칭 중, " 섬"/" 제도" 접미사 규칙으로는 정식 명칭에 도달할 수 없는 것들
-//  - 깊은 밤          → 정식 명칭: 깊은 밤의 항구
-//  - 소산 선착장/소산 주둔지 → 정식 명칭: 소산 주둔지 선착장
-//  - 성전 해안        → 정식 명칭: 성전 해안 정찰지
-// (해모 → 해모 섬은 접미사 규칙만으로 해석되므로 별도 등록 불필요)
-const ISLAND_ALIAS_MAP = {
-    "깊은 밤": "깊은 밤의 항구",
-    "소산 선착장": "소산 주둔지 선착장",
-    "소산 주둔지": "소산 주둔지 선착장",
-    "성전 해안": "성전 해안 정찰지"
-};
-
 // 섬 이름을 " 섬"/" 제도" 접미사 유무 또는 위 별칭 유무에 관계없이 실제 데이터 키로 정규화 (없으면 null)
 function resolveIslandKey(islandName) {
     let cleanName = String(islandName || "").replace(/ 섬$/, '').replace(/ 제도$/, '').trim();
-    if (ISLAND_ALIAS_MAP[cleanName]) return ISLAND_ALIAS_MAP[cleanName];
     if (islandCoordinates[cleanName]) return cleanName;
     if (islandCoordinates[cleanName + " 섬"]) return cleanName + " 섬";
     if (islandCoordinates[cleanName + " 제도"]) return cleanName + " 제도";
