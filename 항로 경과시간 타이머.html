@@ -115,7 +115,7 @@
             <div class="flex items-center gap-2 ml-auto">
                 <div class="text-yellow-600 dark:text-yellow-400 font-mono font-bold text-sm tracking-wider bg-gray-200 dark:bg-black/50 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-700" id="freeTime">00:00 / 00:00</div>
                 <button id="btnFreeTimer" onclick="toggleFreeTimer()" class="bg-green-600 dark:bg-green-600 hover:bg-gray-300 dark:hover:bg-gray-600 text-white dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center">출발</button>
-                <button onclick="resetFreeTimer()" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center">리셋</button>
+                <button id="btnCancelTimer" onclick="resetFreeTimer()" disabled class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center opacity-50 cursor-not-allowed">취소</button>
             </div>
         </div>
 
@@ -743,13 +743,20 @@ function resetFreeTimer() {
 
 function updateTimerButtons(isRunning) {
     const btn = document.getElementById('btnFreeTimer');
-    if (!btn) return;
-    if (isRunning) {
-        btn.innerHTML = '취소';
-        btn.className = 'bg-orange-600 hover:bg-orange-500 text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center';
-    } else {
+    if (btn) {
+        btn.disabled = isRunning;
         btn.innerHTML = '출발';
-        btn.className = 'bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center';
+        btn.className = isRunning
+            ? 'bg-green-600 text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center opacity-50 cursor-not-allowed'
+            : 'bg-green-600 dark:bg-green-600 hover:bg-gray-300 dark:hover:bg-gray-600 text-white dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center';
+    }
+
+    const cancelBtn = document.getElementById('btnCancelTimer');
+    if (cancelBtn) {
+        cancelBtn.disabled = !isRunning;
+        cancelBtn.className = isRunning
+            ? 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center'
+            : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white text-xs px-3 py-1.5 rounded shadow font-bold transition text-center opacity-50 cursor-not-allowed';
     }
 }
 
