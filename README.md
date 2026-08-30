@@ -1,16 +1,21 @@
 ## 사용법
-<img width="693" height="505" alt="설명서" src="https://github.com/user-attachments/assets/5e17d272-572c-4fa0-b4d7-2f1ea4d1d21e" />
+<img width="698" height="580" alt="제목 없음-2" src="https://github.com/user-attachments/assets/1033bc8a-d556-4426-8a5f-ad9f597b955b" />
+<br/><a href="https://applemoon98.github.io/BDO-Barter-Timer/%ED%95%AD%EB%A1%9C%20%EA%B2%BD%EA%B3%BC%EC%8B%9C%EA%B0%84%20%ED%83%80%EC%9D%B4%EB%A8%B8.html" target="_blank" rel="noopener noreferrer">해당 html 사용해보기<a/>
 <br/><br/>
-㉠: 배의 속도와 가속 수치 적어주시면 됩니다.<br/>
-㉡: 과적일 경우 체크해주시면 됩니다. (기존 시간 x 1.6)<br/>
-㉢: 여유롭게 도착하고나서 보고싶으면 그만큼 도착 시간을 늘려줍니다.<br/>
-※ 에벤루스의 놀이 있어서 더 빨리 도착하면 음수로 값을 적고 넣어주시면 됩니다.<br/>
-㉣: 다른 알람을 사용하고 싶을 때, 가져오기를 누르고 원하시는 사운드를 선택하면 됩니다.<br/>
-㉤: 두 섬을 고르면 거리에 비례해서 도착 시간을 보여주고, 출발하면 타이머가 시작됩니다.<br/>
-※ 에벤루스의 놀이 있어서 더 빨리 도착하면 음수로 값을 적고 넣어주시면 됩니다.<br/>
-㉥: 최근에 설정한 거리 10개를 보여줍니다.<br/>
+<p>A: 다크/라이트 모드 전환<br/>
+B: 선박 정보 입력<br/>
+C: 과적 판정 (x1.6)<br/>
+D: 커스텀 시간으로 음수 값 적용 가능 (xN/100)<br/>
+E: 알람음을 로컬에서 가져올 수 있고, 잘 적용됬는지 들어볼 수 있음<br/>
+F: 두 가지 섬을 선택하면 직선 거리를 기준으로 시간을 표시해줌<br/>
+ - 출발을 누르면 타이머가 돌기 시작하며 출발 버튼이 비활성화<br/>
+ - 타이머가 돌기 시작하면 취소 버튼이 활성화, 누르면 타이머가 초기화<br/>
+G: 최근 목적지 10종 출력</p>
 <br/>
-https://applemoon98.github.io/BDO-Barter-Timer/%ED%95%AD%EB%A1%9C%20%EA%B2%BD%EA%B3%BC%EC%8B%9C%EA%B0%84%20%ED%83%80%EC%9D%B4%EB%A8%B8.html<br/>
-<br/>
-<br/>
-참고: https://www.inven.co.kr/board/black/3584/58786
+<details>
+    <summary>참고 사이트</summary>
+    <div>
+      <a href="https://www.inven.co.kr/board/black/3584/58786" target="_blank" rel="noopener noreferrer">[항해] 물교 AI 자동 스케줄러 업뎃 (6/7단) (6.3, 23:00 추가수정)<a/>
+    </div>
+</details>
+
