@@ -286,7 +286,7 @@ function legDistance(nameA, nameB) {
 function syncSpeedToConfig(skipSave) {
     const baseSpeed = parseFloat(document.getElementById('mainShipBaseSpeed').value) || 170;
     const accel = parseFloat(document.getElementById('mainShipAccel').value) || 100;
-    APP_CONFIG.SHIP_SPEED = baseSpeed * (accel + 100)  / 200;
+    APP_CONFIG.SHIP_SPEED = baseSpeed * (accel + 300)  / 400;
 
     const disp = document.getElementById('effectiveSpeedDisplay');
     if (disp) disp.textContent = `(배속 ${parseFloat(APP_CONFIG.SHIP_SPEED.toFixed(2))})`;
